@@ -1,3 +1,17 @@
+// Taskifyra – Worker module (_worker.js)  v7
+// Runs on Cloudflare Pages (Advanced Mode) AND on a normal Workers project with a static-assets binding.
+// Bindings/env: ZV (KV namespace), ASSETS (static files; added automatically by Pages, or by [assets] binding = "ASSETS" on Workers),
+// ADMIN_TOKEN, SITE_URL, ADMIN_EMAIL, FROM_EMAIL,
+// TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (PRIVATE chat with the bot: founder alerts),
+// FOUNDER_CODE (secret passcode, never sent to the browser), RESEND_API_KEY (optional),
+// STRIPE_SECRET, STRIPE_WEBHOOK_SECRET (optional, cards). Set all secrets as "Encrypted" variables.
+// AI (Workers AI binding, variable name exactly "AI"): powers live translation of page content into 9 languages.
+const RATE = 120; // BDT per USD, must match index.html
+
+// ---- Pricing (server is the only authority) -------------------------------------------
+// Base list prices. Student templates (a*) keep these. Freelancer / Garment / Doctor / Engineer
+// templates are re-priced by newP() to 1,200 – 1,800 BDT. index.html uses the identical formula.
+// v6: Job & Career templates (j1–j26) are sold at fixed prices of 600 – 999 BDT (NOT re-priced by newP).
 const OLD = {
   p1: 799, p2: 399, p3: 499, p4: 550, p5: 399, p6: 599, p7: 449, p8: 499,
   g1: 299, g2: 349, g3: 299, g4: 399, g5: 249, g6: 299, g7: 199, g8: 249, g9: 249, g10: 449, g11: 399, g12: 599,
@@ -35,7 +49,8 @@ const isTpl = id => /^[pgamej]\d+$/.test(id);
 const MEMC = { ms: "a", mg: "g", mf: "p", me: "e", mj: "j" }; // which template family each category membership covers
 const memCovers = (item, id) => item === "m" || item === "ma" || isBiz(item) || (MEMC[item] && id[0] === MEMC[item]);
 
-const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+// API and admin responses are never meant for search engines.
+const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
 const rid = (n = 12) => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, "0")).join("");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const kvPut = async (env, k, v, o) => { try { await env.ZV.put(k, v, o); return true; } catch (e) { return false; } };
@@ -140,7 +155,7 @@ async function stripeSig(env, body, header) {
   return sig === p.v1 && Math.abs(Date.now() / 1000 - +p.t) < 300;
 }
 
-// Pages has no Cron Triggers: due alerts go out when a reminder is added and when /api/remind-run is called.
+// No Cron Trigger is configured: due alerts go out when a reminder is added and when /api/remind-run is called.
 async function runReminders(env) {
   let sent = 0;
   for (const k of (await env.ZV.list({ prefix: "rem:" })).keys) {
@@ -178,6 +193,23 @@ async function trOne(env, lang, text) {
 const adminOK = (req, env, url) => env.ADMIN_TOKEN && (req.headers.get("Authorization") === "Bearer " + env.ADMIN_TOKEN || url.searchParams.get("t") === env.ADMIN_TOKEN);
 const founderOK = async (env, tk) => !!(tk && await env.ZV.get("founder:" + tk));
 const ip = req => req.headers.get("CF-Connecting-IP") || "x";
+
+// Serves index.html, robots.txt, sitemap.xml and every other static file.
+// Safe when the ASSETS binding is missing: a clear message instead of "Cannot read properties of undefined (reading 'fetch')".
+// A noindex header on a public page would hide the site from Google, so it is removed here.
+async function serveStatic(req, env) {
+  if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+    return new Response("Taskifyra: static files are not connected. Add the ASSETS binding ([assets] binding = \"ASSETS\" in wrangler.toml) and redeploy.",
+      { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  const res = await env.ASSETS.fetch(req);
+  const xr = res.headers.get("X-Robots-Tag");
+  if (xr && /noindex/i.test(xr)) {
+    const h = new Headers(res.headers); h.delete("X-Robots-Tag");
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
+  }
+  return res;
+}
 
 export default {
   async fetch(req, env) {
@@ -355,7 +387,7 @@ export default {
       }
 
       if (p === "/admin") {
-        if (!adminOK(req, env, url)) return new Response(`<!doctype html><meta name=viewport content="width=device-width"><title>Admin</title><body style="font:16px system-ui;padding:20px"><form method="get"><p>Admin token</p><input name="t" type="password" autocomplete="current-password" style="padding:10px;width:240px"> <button style="padding:10px">Open</button></form>`, { status: 401, headers: { "Content-Type": "text/html" } });
+        if (!adminOK(req, env, url)) return new Response(`<!doctype html><meta name=viewport content="width=device-width"><title>Admin</title><body style="font:16px system-ui;padding:20px"><form method="get"><p>Admin token</p><input name="t" type="password" autocomplete="current-password" style="padding:10px;width:240px"> <button style="padding:10px">Open</button></form>`, { status: 401, headers: { "Content-Type": "text/html", "X-Robots-Tag": "noindex" } });
         const ids = (await env.ZV.list({ prefix: "pend:" })).keys.map(k => k.name.slice(5));
         const rows = (await Promise.all(ids.map(i => env.ZV.get("order:" + i)))).filter(Boolean).map(JSON.parse)
           .filter(o => o.status === "pending").sort((a, b) => b.at - a.at)
@@ -371,9 +403,9 @@ function tk(){return encodeURIComponent(new URLSearchParams(location.search).get
 async function ap(id,b){b.disabled=true;const r=await fetch('/api/admin/approve?t='+tk(),{method:'POST',body:JSON.stringify({id})});b.textContent=r.ok?'Approved':'Failed'}
 async function rel(){const g=x=>document.getElementById(x),o=g('r_out');const body={id:g('r_id').value.trim(),name:g('r_nm').value,v:+g('r_v').value,note:g('r_note').value,lines:g('r_lines').value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean),from:0};o.textContent='Sending...';
 for(;;){const r=await fetch('/api/admin/release?t='+tk(),{method:'POST',body:JSON.stringify(body)});const j=await r.json();if(!j.ok){o.textContent=j.error||'Failed';return}o.textContent='Notified '+j.done+' of '+j.total;if(j.next==null)break;body.from=j.next}o.textContent+=' - done'}
-</script>`, { headers: { "Content-Type": "text/html", "Cache-Control": "no-store" } });
+</script>`, { headers: { "Content-Type": "text/html", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
       }
     } catch (e) { return json({ error: String(e.message || e) }, 400); }
-    return env.ASSETS.fetch(req);
+    return serveStatic(req, env);
   }
 };
