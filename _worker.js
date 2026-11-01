@@ -360,13 +360,16 @@ export default {
         const rows = (await Promise.all(ids.map(i => env.ZV.get("order:" + i)))).filter(Boolean).map(JSON.parse)
           .filter(o => o.status === "pending").sort((a, b) => b.at - a.at)
           .map(o => `<tr><td>${esc(o.customer.name)}<br>${esc(o.customer.phone)}<br>${esc(o.customer.email)}</td><td>${esc(o.item)}</td><td>${o.amount} ${o.currency}<br>${esc(o.method)} ${esc(o.trx)}</td><td><button onclick="ap('${esc(o.id)}',this)">Approve</button></td></tr>`).join("");
+        // NOTE on escaping: this is a JS template literal. "\\r?\\n" below is emitted to the browser as /\r?\n/,
+        // which is a valid regex that splits on LF and CRLF. A single "\n" here would put a raw line break
+        // inside the browser's string/regex literal and break the whole admin script.
         return new Response(`<!doctype html><meta name=viewport content="width=device-width"><title>Admin</title><style>body{font:14px system-ui;padding:12px;max-width:720px}td{border-bottom:1px solid #ccc;padding:8px;vertical-align:top}input,textarea{display:block;width:100%;padding:8px;margin:4px 0;box-sizing:border-box}</style><h2>Pending orders</h2><table>${rows || "<tr><td>None</td></tr>"}</table>
 <h2>Release a new template version</h2><p>Owners keep v1 for life and are emailed; they can upgrade at half price. Members get the latest automatically.</p>
 <input id="r_id" placeholder="Template id, e.g. g1"><input id="r_nm" placeholder="Template name (for the email)"><input id="r_v" type="number" value="2" min="2"><input id="r_note" placeholder="One-line note: what is new"><textarea id="r_lines" rows="6" placeholder="New content, one line per item"></textarea><button onclick="rel()">Publish and notify owners</button> <span id="r_out"></span>
 <script>
 function tk(){return encodeURIComponent(new URLSearchParams(location.search).get('t'))}
 async function ap(id,b){b.disabled=true;const r=await fetch('/api/admin/approve?t='+tk(),{method:'POST',body:JSON.stringify({id})});b.textContent=r.ok?'Approved':'Failed'}
-async function rel(){const g=x=>document.getElementById(x),o=g('r_out');const body={id:g('r_id').value.trim(),name:g('r_nm').value,v:+g('r_v').value,note:g('r_note').value,lines:g('r_lines').value.split('\\n').filter(Boolean),from:0};o.textContent='Sending...';
+async function rel(){const g=x=>document.getElementById(x),o=g('r_out');const body={id:g('r_id').value.trim(),name:g('r_nm').value,v:+g('r_v').value,note:g('r_note').value,lines:g('r_lines').value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean),from:0};o.textContent='Sending...';
 for(;;){const r=await fetch('/api/admin/release?t='+tk(),{method:'POST',body:JSON.stringify(body)});const j=await r.json();if(!j.ok){o.textContent=j.error||'Failed';return}o.textContent='Notified '+j.done+' of '+j.total;if(j.next==null)break;body.from=j.next}o.textContent+=' - done'}
 </script>`, { headers: { "Content-Type": "text/html", "Cache-Control": "no-store" } });
       }
