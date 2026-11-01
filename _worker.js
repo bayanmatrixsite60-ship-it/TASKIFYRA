@@ -1,17 +1,4 @@
-// Taskifyra – Worker module (_worker.js)  v7
-// Runs on Cloudflare Pages (Advanced Mode) AND on a normal Workers project with a static-assets binding.
-// Bindings/env: ZV (KV namespace), ASSETS (static files; added automatically by Pages, or by [assets] binding = "ASSETS" on Workers),
-// ADMIN_TOKEN, SITE_URL, ADMIN_EMAIL, FROM_EMAIL,
-// TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (PRIVATE chat with the bot: founder alerts),
-// FOUNDER_CODE (secret passcode, never sent to the browser), RESEND_API_KEY (optional),
-// STRIPE_SECRET, STRIPE_WEBHOOK_SECRET (optional, cards). Set all secrets as "Encrypted" variables.
-// AI (Workers AI binding, variable name exactly "AI"): powers live translation of page content into 9 languages.
 const RATE = 120; // BDT per USD, must match index.html
-
-// ---- Pricing (server is the only authority) -------------------------------------------
-// Base list prices. Student templates (a*) keep these. Freelancer / Garment / Doctor / Engineer
-// templates are re-priced by newP() to 1,200 – 1,800 BDT. index.html uses the identical formula.
-// v6: Job & Career templates (j1–j26) are sold at fixed prices of 600 – 999 BDT (NOT re-priced by newP).
 const OLD = {
   p1: 799, p2: 399, p3: 499, p4: 550, p5: 399, p6: 599, p7: 449, p8: 499,
   g1: 299, g2: 349, g3: 299, g4: 399, g5: 249, g6: 299, g7: 199, g8: 249, g9: 249, g10: 449, g11: 399, g12: 599,
