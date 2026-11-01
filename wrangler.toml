@@ -17,10 +17,10 @@ binding = "AI"
 # KV namespace: replace with the real ID (Dashboard -> Storage & Databases -> KV -> ZV -> copy ID)
 [[kv_namespaces]]
 binding = "ZV"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "58ce52869edb45078df0207be726ff8a"
 
 # Plain (non-secret) variables only. Put secrets in Settings -> Variables and Secrets as "Secret".
 [vars]
-SITE_URL = "https://taskifyras.bm-core.workers.dev"
-ADMIN_EMAIL = "you@example.com"
-FROM_EMAIL = "Taskifyra <noreply@yourdomain.com>"
+SITE_URL = "https://taskifyra.pages.dev"
+ADMIN_EMAIL = "bayanmatrixsite60@gmail.com"
+FROM_EMAIL = "Taskifyra <re_UqWaXo4Y_79xLgfW3GzxnY6Ppr5L5kW1b>"
