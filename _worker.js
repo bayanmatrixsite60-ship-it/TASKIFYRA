@@ -46,6 +46,19 @@ const dayOf = t => new Date(t + 6 * 3600e3).toISOString().slice(0, 10); // Bangl
 const bdt = t => new Date(t + 6 * 3600e3).toISOString().replace("T", " ").slice(0, 19) + " BD";
 const hit = async (env, key, ttl) => { const n = (+(await env.ZV.get(key)) || 0) + 1; await kvPut(env, key, String(n), { expirationTtl: Math.max(60, ttl) }); return n; };
 
+// Campaign tracking: keep only 4 short, sanitized UTM fields (first-touch, sent by the page with the order)
+const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content"];
+const cleanUtm = u => {
+  const o = {};
+  if (u && typeof u === "object") for (const k of UTM_KEYS) if (u[k]) { const v = clean(u[k], 40).replace(/[^\w.\-]/g, ""); if (v) o[k] = v; }
+  return o;
+};
+const utmTag = u => u ? [u.utm_source, u.utm_campaign, u.utm_content].filter(Boolean).join("|").slice(0, 80) : "";
+
+// Public "unlocked today" counter: one tiny KV counter per Bangladesh day, bumped only when an order is approved
+const cntKey = t => "cnt:" + dayOf(t);
+const bumpToday = async env => { const k = cntKey(Date.now()); await kvPut(env, k, String((+(await env.ZV.get(k)) || 0) + 1), { expirationTtl: 172800 }); };
+
 async function priceOf(env, item) {
   item = String(item || "");
   if (PRICES[item]) return PRICES[item];
@@ -89,12 +102,12 @@ async function mail(env, to, subject, html) {
   await kvPut(env, "log:" + Date.now() + rid(2), JSON.stringify({ to, subject }), { expirationTtl: 2592000 });
   if (!env.RESEND_API_KEY || !to) { console.log("MAIL", to, subject); return; }
   await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env.FROM_EMAIL || "Taskifyra <noreply@example.com>", to: [to], subject, html }) }).catch(e => console.log("mail fail", e));
+    body: JSON.stringify({ from: env.FROM_EMAIL || "TASKIFYRA <noreply@example.com>", to: [to], subject, html }) }).catch(e => console.log("mail fail", e));
 }
 
 // ---------------- Ledger (founder analytics) ----------------
 const ledKey = o => "led:" + String(o.at).padStart(13, "0") + ":" + o.id;
-const ledMeta = o => ({ id: o.id, t: o.at, ap: o.approvedAt || 0, item: o.item, method: o.method, cur: o.currency, amt: o.amount, trx: o.trx || "", name: o.customer.name, email: o.customer.email, p4: String(o.customer.phone || "").slice(-4), status: o.status === "awaiting_card" ? "pending" : o.status, pf: o.pf ? 1 : 0 });
+const ledMeta = o => ({ id: o.id, t: o.at, ap: o.approvedAt || 0, item: o.item, method: o.method, cur: o.currency, amt: o.amount, trx: o.trx || "", name: o.customer.name, email: o.customer.email, p4: String(o.customer.phone || "").slice(-4), status: o.status === "awaiting_card" ? "pending" : o.status, pf: o.pf ? 1 : 0, u: utmTag(o.utm) });
 const ledPut = (env, o) => kvPut(env, ledKey(o), "1", { metadata: ledMeta(o) });
 async function backfill(env) {
   if (await env.ZV.get("led:bf")) return false;
@@ -108,17 +121,18 @@ async function stats(env) {
   let keys = [], cursor;
   for (let i = 0; i < 10; i++) { const r = await env.ZV.list({ prefix: "led:", cursor, limit: 1000 }); keys.push(...r.keys); if (r.list_complete) break; cursor = r.cursor; }
   const E = keys.map(k => k.metadata).filter(Boolean), val = e => e.amt * (e.cur === "USD" ? RATE : 1), A = E.filter(e => e.status === "approved");
-  const now = Date.now(), days = [], months = {}, gateways = {};
+  const now = Date.now(), days = [], months = {}, gateways = {}, sources = {};
   for (let i = 0; i < 7; i++) days.push({ date: dayOf(now - i * 864e5), total: 0, orders: 0, items: {} });
   for (const e of A) { const d = dayOf(e.ap || e.t), m = d.slice(0, 7), dd = days.find(x => x.date === d);
     if (dd) { dd.total += val(e); dd.orders++; dd.items[e.item] = (dd.items[e.item] || 0) + 1; }
     const mm = months[m] = months[m] || { month: m, total: 0, orders: 0 }; mm.total += val(e); mm.orders++;
-    const g = gateways[e.method] = gateways[e.method] || { total: 0, count: 0 }; g.total += val(e); g.count++; }
+    const g = gateways[e.method] = gateways[e.method] || { total: 0, count: 0 }; g.total += val(e); g.count++;
+    const sk = e.u || "direct", sg = sources[sk] = sources[sk] || { total: 0, count: 0 }; sg.total += val(e); sg.count++; }
   const cut = dayOf(now - 30 * 864e5);
   return { ok: true, backfilling: more, today: { total: days[0].total, orders: days[0].orders }, last7: days.reduce((a, d) => a + d.total, 0), total: A.reduce((a, e) => a + val(e), 0),
     last30: A.filter(e => dayOf(e.ap || e.t) >= cut).reduce((a, e) => a + val(e), 0), orders: A.length, members: A.filter(e => isMem(e.item) || isBiz(e.item)).length, pending: E.filter(e => e.status === "pending").length,
-    days, months: Object.values(months).sort((a, b) => b.month.localeCompare(a.month)), gateways,
-    recent: E.slice(-40).reverse().map(e => ({ id: e.id, item: e.item, cur: e.cur, amt: e.amt, name: e.name, email: e.email, p4: e.p4, method: e.method, trx: e.trx, status: e.status, pf: e.pf, at: bdt(e.t).slice(0, 16) })) };
+    days, months: Object.values(months).sort((a, b) => b.month.localeCompare(a.month)), gateways, sources,
+    recent: E.slice(-40).reverse().map(e => ({ id: e.id, item: e.item, cur: e.cur, amt: e.amt, name: e.name, email: e.email, p4: e.p4, method: e.method, trx: e.trx, status: e.status, pf: e.pf, u: e.u || "", at: bdt(e.t).slice(0, 16) })) };
 }
 
 // ---------------- Orders ----------------
@@ -137,7 +151,7 @@ async function createOrder(env, d, method, status, extra = {}) {
   if (method !== "Card" && !proof) throw new Error("Attach a screenshot of your payment");
   const o = { id, key: rid(16), item: String(d.item), method, currency: method === "Card" ? "USD" : "BDT",
     amount: method === "Card" ? Math.round(price / RATE * 100) / 100 : price, trx,
-    customer: { name: clean(c.name, 80), email: clean(c.email, 120), phone: clean(c.phone, 20) }, status, at: Date.now(), pf: proof ? 1 : 0, ...extra };
+    customer: { name: clean(c.name, 80), email: clean(c.email, 120), phone: clean(c.phone, 20) }, status, at: Date.now(), pf: proof ? 1 : 0, utm: cleanUtm(d.utm), ...extra };
   const em = o.customer.email.toLowerCase();
   await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.put("cust:" + em, JSON.stringify({ ...o.customer, last: o.at })), env.ZV.put("pend:" + id, "1"),
     env.ZV.put("ordx:" + em + ":" + id, "1"), ledPut(env, o), proof ? env.ZV.put("proof:" + id, proof, { expirationTtl: 120 * 864e5 }) : 0]);
@@ -169,10 +183,10 @@ async function approve(env, id) {
     if (!a.includes(em) && a.length < 3000) { a.push(em); await env.ZV.put(k, JSON.stringify(a)); }
     if (o.item.startsWith("up:")) { const r = JSON.parse((await env.ZV.get("rel:" + tid)) || "null"); o.ver = r ? r.v : 2; }
   }
-  await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.delete("pend:" + id), ledPut(env, o), addEarnings(env, o)]);
-  await mail(env, o.customer.email, "Your Taskifyra access is unlocked",
+  await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.delete("pend:" + id), ledPut(env, o), addEarnings(env, o), bumpToday(env)]);
+  await mail(env, o.customer.email, "Your TASKIFYRA access is unlocked",
     `<p>Hi ${esc(o.customer.name)}, your payment is approved. Open ${esc(env.SITE_URL || "")} on the device you ordered from; your content unlocks automatically.</p>`);
-  await tg(env, `✅ Approved: ${o.item} · ${o.amount} ${o.currency} · ${o.customer.name} (${o.method})`);
+  await tg(env, `✅ Approved: ${o.item} · ${o.amount} ${o.currency} · ${o.customer.name} (${o.method})${utmTag(o.utm) ? "\nSource: " + utmTag(o.utm) : ""}`);
   return o;
 }
 async function reject(env, id) {
@@ -208,15 +222,17 @@ async function runReminders(env) {
 
 // ---------------- Live translation (Workers AI) ----------------
 const LNG = { bn: "bengali", ar: "arabic", es: "spanish", fr: "french", de: "german", hi: "hindi", zh: "chinese", tr: "turkish", ja: "japanese" };
+// Brand and founder name must never be translated; repair any machine-translated variants before caching/returning.
+const BRAND_FIX = s => String(s).replace(/ট্যাক্সিপ্রা|ট্যাক্সিফাইরা|ট্যাক্সিফাই|টাস্কিফাইরা|টাস্কিফাই|টাস্কিফায়রা|ট্যাস্কিফাইরা/g, "TASKIFYRA");
 async function trChunk(env, tl, text) { try { const r = await env.AI.run("@cf/meta/m2m100-1.2b", { text, source_lang: "english", target_lang: tl }); return (r && r.translated_text) || text; } catch (e) { return text; } }
 async function trOne(env, lang, text) {
-  const ck = new Request("https://tr.taskifyra.cache/" + lang + "/" + (await sha(text)).slice(0, 40));
-  const hitc = await caches.default.match(ck); if (hitc) return await hitc.text();
+  const ck = new Request("https://tr.taskifyra.cache/v2/" + lang + "/" + (await sha(text)).slice(0, 40)); // v2: old cache with wrong brand/menu translations is ignored
+  const hitc = await caches.default.match(ck); if (hitc) return BRAND_FIX(await hitc.text());
   const parts = text.length > 420 ? (text.match(/[^.!?。\n]+[.!?。]*\s*/g) || [text]) : [text];
   const chunks = []; let cur = "";
   for (const p of parts) { if (cur && (cur + p).length > 420) { chunks.push(cur); cur = ""; } cur += p; }
   if (cur) chunks.push(cur);
-  const out = (await Promise.all(chunks.map(c => trChunk(env, LNG[lang], c.trim())))).join(" ").trim() || text;
+  const out = BRAND_FIX((await Promise.all(chunks.map(c => trChunk(env, LNG[lang], c.trim())))).join(" ").trim() || text);
   if (out !== text) await caches.default.put(ck, new Response(out, { headers: { "Cache-Control": "public, max-age=2592000" } })).catch(() => {});
   return out;
 }
@@ -314,12 +330,12 @@ async function tgWebhook(req, env) {
 let _lk = { v: false, t: 0 };
 const locked = async env => { if (Date.now() - _lk.t > 4000) _lk = { v: !!(await env.ZV.get("sec:lockdown")), t: Date.now() }; return _lk.v; };
 const BAD = /(<\s*script|javascript:|onerror\s*=|onload\s*=|union\s+select|or\s+1\s*=\s*1|;\s*drop\s+table|\bsleep\s*\(|\.\.\/|xp_cmdshell|%0d%0a)/i;
-const maint = () => new Response(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Maintenance</title><body style="font-family:system-ui;text-align:center;padding:12vh 20px"><h1>🔧 Back soon</h1><p>Taskifyra is under maintenance. Please check back shortly.</p><p style="margin-top:60px"><a href="#" id=f style="color:#bbb;font-size:12px">·</a></p><script>f.onclick=async e=>{e.preventDefault();const c=prompt("Founder passcode");if(!c)return;const r=await(await fetch("/api/admin/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c})})).json();if(r.ok)location.reload();else alert("No")}</script>`, { status: 503, headers: { "Content-Type": "text/html;charset=utf-8", "Retry-After": "600", "Cache-Control": "no-store" } });
+const maint = () => new Response(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Maintenance</title><body style="font-family:system-ui;text-align:center;padding:12vh 20px"><h1>🔧 Back soon</h1><p>TASKIFYRA is under maintenance. Please check back shortly.</p><p style="margin-top:60px"><a href="#" id=f style="color:#bbb;font-size:12px">·</a></p><script>f.onclick=async e=>{e.preventDefault();const c=prompt("Founder passcode");if(!c)return;const r=await(await fetch("/api/admin/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c})})).json();if(r.ok)location.reload();else alert("No")}</script>`, { status: 503, headers: { "Content-Type": "text/html;charset=utf-8", "Retry-After": "600", "Cache-Control": "no-store" } });
 function harden(r, p, api, env) {
   const h = new Headers(r.headers);
   h.set("X-Content-Type-Options", "nosniff"); h.set("X-Frame-Options", "DENY"); h.set("Referrer-Policy", "strict-origin-when-cross-origin");
   h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()"); h.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); h.set("Cross-Origin-Opener-Policy", "same-origin");
-  const csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+  const csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
   h.set(env.CSP_ENFORCE ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only", csp);
   if (api) h.set("Cache-Control", "no-store"); else if (p === "/sw.js") { h.set("Cache-Control", "no-cache"); h.set("Service-Worker-Allowed", "/"); } else if (p.startsWith("/icons/")) h.set("Cache-Control", "public, max-age=604800");
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
@@ -330,7 +346,7 @@ const founderOK = async (env, tk) => !!(tk && await env.ZV.get("founder:" + tk))
 
 async function serveStatic(req, env) {
   if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
-    return new Response("Taskifyra: static files are not connected. Add the ASSETS binding ([assets] binding = \"ASSETS\" in wrangler.toml) and redeploy.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+    return new Response("TASKIFYRA: static files are not connected. Add the ASSETS binding ([assets] binding = \"ASSETS\" in wrangler.toml) and redeploy.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
   }
   const res = await env.ASSETS.fetch(req);
   const xr = res.headers.get("X-Robots-Tag");
@@ -372,6 +388,11 @@ async function route(req, env, ctx, url, p) {
       if (!adminOK(req, env, url)) return json({ error: "auth" }, 401);
       return json(await tgApi(env, "setWebhook", { url: (env.SITE_URL || url.origin).replace(/\/$/, "") + "/api/tg-webhook", secret_token: await tgSecret(env), allowed_updates: ["callback_query"] }));
     }
+    // public, read-only: real number of kits unlocked today (Bangladesh day). Used by the "unlocked today" trust badge.
+    if (p === "/api/proof-count" && req.method === "GET") {
+      const n = +(await env.ZV.get(cntKey(Date.now()))) || 0;
+      return json({ ok: true, today: n });
+    }
     // founder-only security console
     if (p === "/api/admin/unlock" && req.method === "POST") {
       const n = +(await env.ZV.get("sec:fail:" + ip(req))) || 0; if (n >= 5) return json({ ok: false }, 429);
@@ -408,10 +429,11 @@ async function route(req, env, ctx, url, p) {
       if (!d.trx || String(d.trx).trim().length < 4) return json({ error: "Enter the transaction ID" }, 400);
       const o = await createOrder(env, d, d.method, "pending");
       ctx.waitUntil((async () => {
-        const cap = `🛒 New ${o.method} order\nBuyer: ${o.customer.name} · ${o.customer.phone}\n${o.customer.email}\nKit: ${o.item}\nAmount: ${o.amount} ${o.currency}\nGateway: ${o.method} · TRX ${o.trx}\nTime: ${bdt(o.at)}`;
+        const src = utmTag(o.utm);
+        const cap = `🛒 New ${o.method} order\nBuyer: ${o.customer.name} · ${o.customer.phone}\n${o.customer.email}\nKit: ${o.item}\nAmount: ${o.amount} ${o.currency}\nGateway: ${o.method} · TRX ${o.trx}${src ? "\nSource: " + src : ""}\nTime: ${bdt(o.at)}`;
         const kb = { inline_keyboard: [[{ text: "✅ Approve", callback_data: "AP:" + o.id }, { text: "❌ Reject", callback_data: "RJ:" + o.id }], ...secKb(ip(req), "-").inline_keyboard] };
         if (!(o._proof && await tgPhoto(env, o._proof, cap, kb))) await tg(env, cap + (o._proof ? "" : "\n(no screenshot)"), kb);
-        await mail(env, env.ADMIN_EMAIL, `New ${o.method} order ${o.amount} BDT`, `<p>${esc(o.customer.name)} · ${esc(o.customer.phone)} · ${esc(o.customer.email)}<br>Item ${esc(o.item)} · TRX ${esc(o.trx)}<br><a href="${esc(env.SITE_URL)}/admin">Open admin</a></p>`);
+        await mail(env, env.ADMIN_EMAIL, `New ${o.method} order ${o.amount} BDT`, `<p>${esc(o.customer.name)} · ${esc(o.customer.phone)} · ${esc(o.customer.email)}<br>Item ${esc(o.item)} · TRX ${esc(o.trx)}${src ? "<br>Source " + esc(src) : ""}<br><a href="${esc(env.SITE_URL)}/admin">Open admin</a></p>`);
       })());
       return json({ id: o.id, key: o.key, status: o.status });
     }
@@ -424,10 +446,10 @@ async function route(req, env, ctx, url, p) {
       if (!env.STRIPE_SECRET) return json({ error: "stripe not configured" }, 503);
       const o = await createOrder(env, await req.json(), "Card", "awaiting_card");
       const f = new URLSearchParams({ mode: "payment", success_url: env.SITE_URL + "/?paid=1", cancel_url: env.SITE_URL + "/", customer_email: o.customer.email, client_reference_id: o.id,
-        "line_items[0][quantity]": "1", "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(Math.round(o.amount * 100)), "line_items[0][price_data][product_data][name]": "Taskifyra " + o.item });
+        "line_items[0][quantity]": "1", "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(Math.round(o.amount * 100)), "line_items[0][price_data][product_data][name]": "TASKIFYRA " + o.item });
       const r = await (await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { Authorization: "Bearer " + env.STRIPE_SECRET, "Content-Type": "application/x-www-form-urlencoded" }, body: f })).json();
       if (!r.url) return json({ error: "stripe" }, 502);
-      ctx.waitUntil(tg(env, `💳 Card checkout started: ${o.item} · $${o.amount}\n${o.customer.name} · ${o.customer.email}\n${bdt(o.at)}`));
+      ctx.waitUntil(tg(env, `💳 Card checkout started: ${o.item} · $${o.amount}\n${o.customer.name} · ${o.customer.email}${utmTag(o.utm) ? "\nSource: " + utmTag(o.utm) : ""}\n${bdt(o.at)}`));
       return json({ url: r.url, id: o.id, key: o.key });
     }
     if (p === "/api/stripe-webhook" && req.method === "POST") {
@@ -462,7 +484,7 @@ async function route(req, env, ctx, url, p) {
       const note = String(d.note || "").slice(0, 300), name = String(d.name || id).slice(0, 80), lines = (Array.isArray(d.lines) ? d.lines : []).map(x => String(x).slice(0, 400)).slice(0, 40);
       if (from === 0) await env.ZV.put("rel:" + id, JSON.stringify({ v, note, lines, at: Date.now() }));
       const own = JSON.parse((await env.ZV.get("own:" + id)) || "[]"), batch = own.slice(from, from + 15), half = Math.round(PRICES[id] / 2);
-      await Promise.all(batch.map(em => mail(env, em, `🔔 New version of ${name} on Taskifyra`, `<p>Version ${v} of <b>${esc(name)}</b> is out. ${esc(note)}</p><p>Upgrade for half price (${half} BDT) at ${esc(env.SITE_URL || "")}.</p>`)));
+      await Promise.all(batch.map(em => mail(env, em, `🔔 New version of ${name} on TASKIFYRA`, `<p>Version ${v} of <b>${esc(name)}</b> is out. ${esc(note)}</p><p>Upgrade for half price (${half} BDT) at ${esc(env.SITE_URL || "")}.</p>`)));
       if (from === 0) await tg(env, `🔔 Release: ${id} v${v} · notifying ${own.length} owner(s)`);
       return json({ ok: true, total: own.length, done: Math.min(own.length, from + batch.length), next: from + 15 < own.length ? from + 15 : null });
     }
@@ -494,7 +516,7 @@ async function route(req, env, ctx, url, p) {
       if (!text.trim()) return json({ error: "empty" }, 400);
       const fb = { text, name: clean(d.name, 80), email: clean(d.email, 120), at: Date.now() };
       const [saved, sent] = await Promise.all([kvPut(env, "fb:" + fb.at + rid(2), JSON.stringify(fb)), tg(env, `📜 New feedback\nFrom: ${fb.name} <${fb.email}>\n\n${fb.text}`)]);
-      if (env.ADMIN_EMAIL) ctx.waitUntil(mail(env, env.ADMIN_EMAIL, "New feedback on Taskifyra", `<p>${esc(fb.name)} &lt;${esc(fb.email)}&gt;</p><p>${esc(fb.text)}</p>`));
+      if (env.ADMIN_EMAIL) ctx.waitUntil(mail(env, env.ADMIN_EMAIL, "New feedback on TASKIFYRA", `<p>${esc(fb.name)} &lt;${esc(fb.email)}&gt;</p><p>${esc(fb.text)}</p>`));
       if (!sent && !saved) return json({ ok: false, error: "Set TG_BOT_TOKEN, TG_CHAT_ID and the ZV KV binding" }, 503);
       return json({ ok: true, telegram: sent, saved });
     }
@@ -535,7 +557,7 @@ async function route(req, env, ctx, url, p) {
       const ids = (await env.ZV.list({ prefix: "pend:" })).keys.map(k => k.name.slice(5));
       const T = encodeURIComponent(url.searchParams.get("t") || "");
       const rows = (await Promise.all(ids.map(i => env.ZV.get("order:" + i)))).filter(Boolean).map(JSON.parse).filter(o => o.status === "pending").sort((a, b) => b.at - a.at)
-        .map(o => `<tr><td>${esc(o.customer.name)}<br>${esc(o.customer.phone)}<br>${esc(o.customer.email)}</td><td>${esc(o.item)}</td><td>${o.amount} ${o.currency}<br>${esc(o.method)} ${esc(o.trx)}${o.pf ? `<br><a href="/api/admin/proof?id=${esc(o.id)}&t=${T}" target="_blank">📎 proof</a>` : ""}</td><td><button onclick="ap('${esc(o.id)}',this)">Approve</button></td></tr>`).join("");
+        .map(o => `<tr><td>${esc(o.customer.name)}<br>${esc(o.customer.phone)}<br>${esc(o.customer.email)}</td><td>${esc(o.item)}</td><td>${o.amount} ${o.currency}<br>${esc(o.method)} ${esc(o.trx)}${utmTag(o.utm) ? `<br><small>↳ ${esc(utmTag(o.utm))}</small>` : ""}${o.pf ? `<br><a href="/api/admin/proof?id=${esc(o.id)}&t=${T}" target="_blank">📎 proof</a>` : ""}</td><td><button onclick="ap('${esc(o.id)}',this)">Approve</button></td></tr>`).join("");
       // NOTE on escaping: "\\r?\\n" below is emitted to the browser as /\r?\n/ (a valid regex).
       return new Response(`<!doctype html><meta name=viewport content="width=device-width"><title>Admin</title><style>body{font:14px system-ui;padding:12px;max-width:720px}td{border-bottom:1px solid #ccc;padding:8px;vertical-align:top}input,textarea{display:block;width:100%;padding:8px;margin:4px 0;box-sizing:border-box}</style><h2>Pending orders</h2><table>${rows || "<tr><td>None</td></tr>"}</table>
 <h2>Release a new template version</h2><p>Owners are emailed and can upgrade at half price (valid 6 months). Members get the latest automatically.</p>
