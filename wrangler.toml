@@ -1,19 +1,26 @@
 name = "taskifyras"
 main = "_worker.js"
 compatibility_date = "2025-09-01"
-pages_build_output_dir = "./"
+
+# Static files (index.html, robots.txt, sitemap.xml) are served through the ASSETS binding.
+# run_worker_first = true makes every request go through _worker.js first (API, /admin, then static files),
+# exactly like Pages Advanced Mode.
+[assets]
+directory = "./"
+binding = "ASSETS"
+run_worker_first = true
 
 # Workers AI (live translation)
 [ai]
 binding = "AI"
 
-# KV namespace
+# KV namespace: replace with the real ID (Dashboard -> Storage & Databases -> KV -> ZV -> copy ID)
 [[kv_namespaces]]
 binding = "ZV"
-id = "58ce52869edb45078df0207be726ff8a"
+id = "YOUR_KV_NAMESPACE_ID"
 
-# Non-secret variables only
+# Plain (non-secret) variables only. Put secrets in Settings -> Variables and Secrets as "Secret".
 [vars]
-SITE_URL = "https://taskifyra.pages.dev"
-ADMIN_EMAIL = "bayanmatrixsite60@gmail.com"
-FROM_EMAIL = "Taskifyra <re_UqWaXo4Y_79xLgfW3GzxnY6Ppr5L5kW1b>"
+SITE_URL = "https://taskifyras.bm-core.workers.dev"
+ADMIN_EMAIL = "you@example.com"
+FROM_EMAIL = "Taskifyra <noreply@yourdomain.com>"
