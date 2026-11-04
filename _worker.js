@@ -13,7 +13,7 @@ const OLD = {
 };
 const NB = [249, 299, 349, 399, 449, 499];
 for (const [pre, a, b] of [["p", 17, 30], ["g", 19, 32], ["a", 13, 24], ["m", 16, 25], ["e", 20, 31]]) for (let n = a; n <= b; n++) OLD[pre + n] = NB[n % 6];
-const newP = (id, o) => /^[pgme]\d+$/.test(id) ? 1200 + Math.min(6, Math.max(0, Math.round((o - 199) / 100))) * 100 : o;
+const newP = (id, o) => /^[pgme]\d+$/.test(id)?(o<=249?99:o<=299?149:o<=349?199:o<=399?249:o<=449?299:o<=499?349:o<=599?449:o<=699?499:o<=799?599:699):o;
 const PRICES = {};
 for (const k in OLD) PRICES[k] = newP(k, OLD[k]);
 Object.assign(PRICES, {
@@ -26,6 +26,7 @@ Object.assign(PRICES, {
   b10m: 9900, b10q: 28215, b10y: 100980, b50m: 24900, b50q: 70965, b50y: 253980
 });
 const MEMBER_MS = 30 * 864e5;
+const PROMO_END = Date.parse("2026-12-16T23:59:59+06:00"), PROMO_PRO_MS = 30 * 864e5, PROMO_N = 3; // sign-up offer: 30 days Pro + 3 templates at 50%
 const isMem = id => /^(m|ms|mg|mf|me|mj|ma)$/.test(id);
 const isBiz = id => /^b(10|50)[mqy]$/.test(id);
 const isTpl = id => /^[pgamej]\d+$/.test(id);
@@ -45,19 +46,6 @@ const ip = req => req.headers.get("CF-Connecting-IP") || "x";
 const dayOf = t => new Date(t + 6 * 3600e3).toISOString().slice(0, 10); // Bangladesh day
 const bdt = t => new Date(t + 6 * 3600e3).toISOString().replace("T", " ").slice(0, 19) + " BD";
 const hit = async (env, key, ttl) => { const n = (+(await env.ZV.get(key)) || 0) + 1; await kvPut(env, key, String(n), { expirationTtl: Math.max(60, ttl) }); return n; };
-
-// Campaign tracking: keep only 4 short, sanitized UTM fields (first-touch, sent by the page with the order)
-const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content"];
-const cleanUtm = u => {
-  const o = {};
-  if (u && typeof u === "object") for (const k of UTM_KEYS) if (u[k]) { const v = clean(u[k], 40).replace(/[^\w.\-]/g, ""); if (v) o[k] = v; }
-  return o;
-};
-const utmTag = u => u ? [u.utm_source, u.utm_campaign, u.utm_content].filter(Boolean).join("|").slice(0, 80) : "";
-
-// Public "unlocked today" counter: one tiny KV counter per Bangladesh day, bumped only when an order is approved
-const cntKey = t => "cnt:" + dayOf(t);
-const bumpToday = async env => { const k = cntKey(Date.now()); await kvPut(env, k, String((+(await env.ZV.get(k)) || 0) + 1), { expirationTtl: 172800 }); };
 
 async function priceOf(env, item) {
   item = String(item || "");
@@ -102,12 +90,12 @@ async function mail(env, to, subject, html) {
   await kvPut(env, "log:" + Date.now() + rid(2), JSON.stringify({ to, subject }), { expirationTtl: 2592000 });
   if (!env.RESEND_API_KEY || !to) { console.log("MAIL", to, subject); return; }
   await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env.FROM_EMAIL || "TASKIFYRA <noreply@example.com>", to: [to], subject, html }) }).catch(e => console.log("mail fail", e));
+    body: JSON.stringify({ from: env.FROM_EMAIL || "Taskifyra <noreply@example.com>", to: [to], subject, html }) }).catch(e => console.log("mail fail", e));
 }
 
 // ---------------- Ledger (founder analytics) ----------------
 const ledKey = o => "led:" + String(o.at).padStart(13, "0") + ":" + o.id;
-const ledMeta = o => ({ id: o.id, t: o.at, ap: o.approvedAt || 0, item: o.item, method: o.method, cur: o.currency, amt: o.amount, trx: o.trx || "", name: o.customer.name, email: o.customer.email, p4: String(o.customer.phone || "").slice(-4), status: o.status === "awaiting_card" ? "pending" : o.status, pf: o.pf ? 1 : 0, u: utmTag(o.utm) });
+const ledMeta = o => ({ id: o.id, t: o.at, ap: o.approvedAt || 0, item: o.item, method: o.method, cur: o.currency, amt: o.amount, trx: o.trx || "", name: o.customer.name, email: o.customer.email, p4: String(o.customer.phone || "").slice(-4), status: o.status === "awaiting_card" ? "pending" : o.status, pf: o.pf ? 1 : 0 });
 const ledPut = (env, o) => kvPut(env, ledKey(o), "1", { metadata: ledMeta(o) });
 async function backfill(env) {
   if (await env.ZV.get("led:bf")) return false;
@@ -121,24 +109,24 @@ async function stats(env) {
   let keys = [], cursor;
   for (let i = 0; i < 10; i++) { const r = await env.ZV.list({ prefix: "led:", cursor, limit: 1000 }); keys.push(...r.keys); if (r.list_complete) break; cursor = r.cursor; }
   const E = keys.map(k => k.metadata).filter(Boolean), val = e => e.amt * (e.cur === "USD" ? RATE : 1), A = E.filter(e => e.status === "approved");
-  const now = Date.now(), days = [], months = {}, gateways = {}, sources = {};
+  const now = Date.now(), days = [], months = {}, gateways = {};
   for (let i = 0; i < 7; i++) days.push({ date: dayOf(now - i * 864e5), total: 0, orders: 0, items: {} });
   for (const e of A) { const d = dayOf(e.ap || e.t), m = d.slice(0, 7), dd = days.find(x => x.date === d);
     if (dd) { dd.total += val(e); dd.orders++; dd.items[e.item] = (dd.items[e.item] || 0) + 1; }
     const mm = months[m] = months[m] || { month: m, total: 0, orders: 0 }; mm.total += val(e); mm.orders++;
-    const g = gateways[e.method] = gateways[e.method] || { total: 0, count: 0 }; g.total += val(e); g.count++;
-    const sk = e.u || "direct", sg = sources[sk] = sources[sk] || { total: 0, count: 0 }; sg.total += val(e); sg.count++; }
+    const g = gateways[e.method] = gateways[e.method] || { total: 0, count: 0 }; g.total += val(e); g.count++; }
   const cut = dayOf(now - 30 * 864e5);
   return { ok: true, backfilling: more, today: { total: days[0].total, orders: days[0].orders }, last7: days.reduce((a, d) => a + d.total, 0), total: A.reduce((a, e) => a + val(e), 0),
     last30: A.filter(e => dayOf(e.ap || e.t) >= cut).reduce((a, e) => a + val(e), 0), orders: A.length, members: A.filter(e => isMem(e.item) || isBiz(e.item)).length, pending: E.filter(e => e.status === "pending").length,
-    days, months: Object.values(months).sort((a, b) => b.month.localeCompare(a.month)), gateways, sources,
-    recent: E.slice(-40).reverse().map(e => ({ id: e.id, item: e.item, cur: e.cur, amt: e.amt, name: e.name, email: e.email, p4: e.p4, method: e.method, trx: e.trx, status: e.status, pf: e.pf, u: e.u || "", at: bdt(e.t).slice(0, 16) })) };
+    days, months: Object.values(months).sort((a, b) => b.month.localeCompare(a.month)), gateways,
+    recent: E.slice(-40).reverse().map(e => ({ id: e.id, item: e.item, cur: e.cur, amt: e.amt, name: e.name, email: e.email, p4: e.p4, method: e.method, trx: e.trx, status: e.status, pf: e.pf, at: bdt(e.t).slice(0, 16) })) };
 }
 
 // ---------------- Orders ----------------
-async function createOrder(env, d, method, status, extra = {}) {
+async function createOrder(env, d, method, status, extra = {}, acct = null) {
   const c = d.customer || {};
-  const price = await priceOf(env, d.item);
+  let price = await priceOf(env, d.item), pr = null, promoUsed = false;
+  if (price && acct && isTpl(String(d.item))) { pr = await getPromo(env, acct.email); if (pr && pr.until > Date.now() && PROMO_N - (pr.used || []).length > 0) { price = Math.round(price / 2); promoUsed = true; } }
   if (!price) throw new Error("bad item");
   if (!c.name || !/.+@.+\..+/.test(c.email || "") || !c.phone) throw new Error("bad customer");
   const id = rid(6), trx = String(d.trx || "").trim().slice(0, 40);
@@ -151,10 +139,11 @@ async function createOrder(env, d, method, status, extra = {}) {
   if (method !== "Card" && !proof) throw new Error("Attach a screenshot of your payment");
   const o = { id, key: rid(16), item: String(d.item), method, currency: method === "Card" ? "USD" : "BDT",
     amount: method === "Card" ? Math.round(price / RATE * 100) / 100 : price, trx,
-    customer: { name: clean(c.name, 80), email: clean(c.email, 120), phone: clean(c.phone, 20) }, status, at: Date.now(), pf: proof ? 1 : 0, utm: cleanUtm(d.utm), ...extra };
+    customer: { name: clean(c.name, 80), email: clean(c.email, 120), phone: clean(c.phone, 20) }, status, at: Date.now(), pf: proof ? 1 : 0, promo: promoUsed ? 1 : 0, acct: promoUsed ? acct.email : "", ...extra };
   const em = o.customer.email.toLowerCase();
   await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.put("cust:" + em, JSON.stringify({ ...o.customer, last: o.at })), env.ZV.put("pend:" + id, "1"),
     env.ZV.put("ordx:" + em + ":" + id, "1"), ledPut(env, o), proof ? env.ZV.put("proof:" + id, proof, { expirationTtl: 120 * 864e5 }) : 0]);
+  if (promoUsed && method !== "Card") { pr.used = [...(pr.used || []), id]; await savePromo(env, acct.email, pr); }
   o._proof = proof;
   return o;
 }
@@ -173,6 +162,8 @@ async function approve(env, id) {
   const o = JSON.parse(raw);
   if (o.status === "approved") return o;
   o.status = "approved"; o.approvedAt = Date.now();
+  if (o.promo && o.acct) { const pr = await getPromo(env, o.acct); if (pr && !(pr.used || []).includes(o.id)) { pr.used = [...(pr.used || []), o.id]; await savePromo(env, o.acct, pr); } }
+  await hit(env, "pc:" + dayOf(Date.now()), 172800).catch(() => {});
   if (isMem(o.item)) o.exp = Date.now() + MEMBER_MS;
   else if (isBiz(o.item)) o.exp = Date.now() + MEMBER_MS * { m: 1, q: 3, y: 12 }[o.item.slice(-1)];
   else o.exp = tplExp(); // single template or upgrade: valid 6 months, then locks until renewed
@@ -183,16 +174,16 @@ async function approve(env, id) {
     if (!a.includes(em) && a.length < 3000) { a.push(em); await env.ZV.put(k, JSON.stringify(a)); }
     if (o.item.startsWith("up:")) { const r = JSON.parse((await env.ZV.get("rel:" + tid)) || "null"); o.ver = r ? r.v : 2; }
   }
-  await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.delete("pend:" + id), ledPut(env, o), addEarnings(env, o), bumpToday(env)]);
-  await mail(env, o.customer.email, "Your TASKIFYRA access is unlocked",
+  await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.delete("pend:" + id), ledPut(env, o), addEarnings(env, o)]);
+  await mail(env, o.customer.email, "Your Taskifyra access is unlocked",
     `<p>Hi ${esc(o.customer.name)}, your payment is approved. Open ${esc(env.SITE_URL || "")} on the device you ordered from; your content unlocks automatically.</p>`);
-  await tg(env, `✅ Approved: ${o.item} · ${o.amount} ${o.currency} · ${o.customer.name} (${o.method})${utmTag(o.utm) ? "\nSource: " + utmTag(o.utm) : ""}`);
+  await tg(env, `✅ Approved: ${o.item} · ${o.amount} ${o.currency} · ${o.customer.name} (${o.method})`);
   return o;
 }
 async function reject(env, id) {
   const raw = await env.ZV.get("order:" + id); if (!raw) return null;
   const o = JSON.parse(raw); if (o.status === "approved") return o;
-  o.status = "rejected"; await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.delete("pend:" + id), ledPut(env, o)]); return o;
+  o.status = "rejected"; if (o.promo && o.acct) { const pr = await getPromo(env, o.acct); if (pr) { pr.used = (pr.used || []).filter(x => x !== o.id); await savePromo(env, o.acct, pr); } } await Promise.all([env.ZV.put("order:" + id, JSON.stringify(o)), env.ZV.delete("pend:" + id), ledPut(env, o)]); return o;
 }
 
 async function stripeSig(env, body, header) {
@@ -222,21 +213,22 @@ async function runReminders(env) {
 
 // ---------------- Live translation (Workers AI) ----------------
 const LNG = { bn: "bengali", ar: "arabic", es: "spanish", fr: "french", de: "german", hi: "hindi", zh: "chinese", tr: "turkish", ja: "japanese" };
-// Brand and founder name must never be translated; repair any machine-translated variants before caching/returning.
-const BRAND_FIX = s => String(s).replace(/ট্যাক্সিপ্রা|ট্যাক্সিফাইরা|ট্যাক্সিফাই|টাস্কিফাইরা|টাস্কিফাই|টাস্কিফায়রা|ট্যাস্কিফাইরা/g, "TASKIFYRA");
 async function trChunk(env, tl, text) { try { const r = await env.AI.run("@cf/meta/m2m100-1.2b", { text, source_lang: "english", target_lang: tl }); return (r && r.translated_text) || text; } catch (e) { return text; } }
 async function trOne(env, lang, text) {
-  const ck = new Request("https://tr.taskifyra.cache/v2/" + lang + "/" + (await sha(text)).slice(0, 40)); // v2: old cache with wrong brand/menu translations is ignored
-  const hitc = await caches.default.match(ck); if (hitc) return BRAND_FIX(await hitc.text());
+  const ck = new Request("https://tr.taskifyra.cache/" + lang + "/" + (await sha(text)).slice(0, 40));
+  const hitc = await caches.default.match(ck); if (hitc) return await hitc.text();
   const parts = text.length > 420 ? (text.match(/[^.!?。\n]+[.!?。]*\s*/g) || [text]) : [text];
   const chunks = []; let cur = "";
   for (const p of parts) { if (cur && (cur + p).length > 420) { chunks.push(cur); cur = ""; } cur += p; }
   if (cur) chunks.push(cur);
-  const out = BRAND_FIX((await Promise.all(chunks.map(c => trChunk(env, LNG[lang], c.trim())))).join(" ").trim() || text);
+  const out = (await Promise.all(chunks.map(c => trChunk(env, LNG[lang], c.trim())))).join(" ").trim() || text;
   if (out !== text) await caches.default.put(ck, new Response(out, { headers: { "Cache-Control": "public, max-age=2592000" } })).catch(() => {});
   return out;
 }
 
+const getPromo = async (env, em) => { try { return JSON.parse((await env.ZV.get("promo:" + em)) || "null"); } catch (e) { return null; } };
+const savePromo = (env, em, p) => env.ZV.put("promo:" + em, JSON.stringify(p), { expirationTtl: 90 * 864e5 });
+const promoView = p => p ? { pro: p.pro, until: p.until, disc: Math.max(0, PROMO_N - (p.used || []).length) } : null;
 // ---------------- Accounts (15+ char password, PBKDF2-SHA256 hash, KV) ----------------
 const nph = p => { let d = String(p || "").replace(/\D/g, ""); if (d.startsWith("880")) d = "0" + d.slice(3); return d; };
 async function hashPw(env, pw, salt) {
@@ -266,8 +258,9 @@ async function signup(req, env, ctx) {
   if (await env.ZV.get("acct:" + email) || await env.ZV.get("ph:" + phone)) return json({ ok: false, error: "An account with this email or mobile already exists. Please log in." }, 409);
   const salt = rid(16), h8 = (await sha(email)).slice(0, 8);
   await Promise.all([env.ZV.put("acct:" + email, JSON.stringify({ name, email, phone: String(d.phone).replace(/[^0-9+\-\s]/g, "").slice(0, 20), salt, hash: await hashPw(env, pw, salt), at: Date.now(), h8 })), env.ZV.put("ph:" + phone, email), env.ZV.put("eh:" + h8, email)]);
-  ctx.waitUntil(secAlert(env, "🆕 New sign-up", ip(req), `${name} · ${email} · ${phone}`, h8));
-  return json({ ok: true, tok: await mkSession(env, email), user: { name, email, phone: String(d.phone).slice(0, 20) } });
+  let pr = null; if (Date.now() <= PROMO_END) { pr = { pro: Date.now() + PROMO_PRO_MS, until: Date.now() + PROMO_PRO_MS, used: [] }; await savePromo(env, email, pr); }
+  ctx.waitUntil(secAlert(env, "🆕 New sign-up" + (pr ? " 🎁 offer" : ""), ip(req), `${name} · ${email} · ${phone}`, h8));
+  return json({ ok: true, tok: await mkSession(env, email), user: { name, email, phone: String(d.phone).slice(0, 20) }, promo: promoView(pr) });
 }
 async function login(req, env, ctx) {
   const g = await authGuard(env, req); if (g) return g;
@@ -280,13 +273,13 @@ async function login(req, env, ctx) {
   if (!ok) { const n = a ? await hit(env, "lf:" + email, 900) : 0; ctx.waitUntil(secAlert(env, "⚠️ Failed login" + (n >= 5 ? " (account locked 15 min)" : ""), ip(req), (email || id) + " · attempt " + n, h8)); return json({ ok: false, error: "Wrong email/mobile or password." }, 401); }
   await env.ZV.delete("lf:" + email);
   ctx.waitUntil(secAlert(env, "🔑 Login", ip(req), `${a.name} · ${email}`, h8));
-  return json({ ok: true, tok: await mkSession(env, email), user: pubUser(a) });
+  return json({ ok: true, tok: await mkSession(env, email), user: pubUser(a), promo: promoView(await getPromo(env, email)) });
 }
 async function me(req, env) {
   const a = await sessUser(req, env); if (!a) return json({ ok: false }, 401);
   const ids = (await env.ZV.list({ prefix: "ordx:" + a.email + ":", limit: 40 })).keys.map(k => k.name.split(":").pop());
   const orders = (await Promise.all(ids.map(i => env.ZV.get("order:" + i)))).filter(Boolean).map(JSON.parse).map(o => ({ id: o.id, key: o.key, item: o.item, pm: o.method, status: o.status === "awaiting_card" ? "pending" : o.status, at: o.at, exp: o.exp }));
-  return json({ ok: true, user: pubUser(a), orders, notes: JSON.parse((await env.ZV.get("notes:" + a.email)) || "[]") });
+  return json({ ok: true, user: pubUser(a), orders, promo: promoView(await getPromo(env, a.email)), notes: JSON.parse((await env.ZV.get("notes:" + a.email)) || "[]") });
 }
 async function saveNotes(req, env) {
   const a = await sessUser(req, env); if (!a) return json({ ok: false }, 401);
@@ -330,12 +323,12 @@ async function tgWebhook(req, env) {
 let _lk = { v: false, t: 0 };
 const locked = async env => { if (Date.now() - _lk.t > 4000) _lk = { v: !!(await env.ZV.get("sec:lockdown")), t: Date.now() }; return _lk.v; };
 const BAD = /(<\s*script|javascript:|onerror\s*=|onload\s*=|union\s+select|or\s+1\s*=\s*1|;\s*drop\s+table|\bsleep\s*\(|\.\.\/|xp_cmdshell|%0d%0a)/i;
-const maint = () => new Response(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Maintenance</title><body style="font-family:system-ui;text-align:center;padding:12vh 20px"><h1>🔧 Back soon</h1><p>TASKIFYRA is under maintenance. Please check back shortly.</p><p style="margin-top:60px"><a href="#" id=f style="color:#bbb;font-size:12px">·</a></p><script>f.onclick=async e=>{e.preventDefault();const c=prompt("Founder passcode");if(!c)return;const r=await(await fetch("/api/admin/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c})})).json();if(r.ok)location.reload();else alert("No")}</script>`, { status: 503, headers: { "Content-Type": "text/html;charset=utf-8", "Retry-After": "600", "Cache-Control": "no-store" } });
+const maint = () => new Response(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Maintenance</title><body style="font-family:system-ui;text-align:center;padding:12vh 20px"><h1>🔧 Back soon</h1><p>Taskifyra is under maintenance. Please check back shortly.</p><p style="margin-top:60px"><a href="#" id=f style="color:#bbb;font-size:12px">·</a></p><script>f.onclick=async e=>{e.preventDefault();const c=prompt("Founder passcode");if(!c)return;const r=await(await fetch("/api/admin/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c})})).json();if(r.ok)location.reload();else alert("No")}</script>`, { status: 503, headers: { "Content-Type": "text/html;charset=utf-8", "Retry-After": "600", "Cache-Control": "no-store" } });
 function harden(r, p, api, env) {
   const h = new Headers(r.headers);
   h.set("X-Content-Type-Options", "nosniff"); h.set("X-Frame-Options", "DENY"); h.set("Referrer-Policy", "strict-origin-when-cross-origin");
   h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()"); h.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); h.set("Cross-Origin-Opener-Policy", "same-origin");
-  const csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+  const csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
   h.set(env.CSP_ENFORCE ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only", csp);
   if (api) h.set("Cache-Control", "no-store"); else if (p === "/sw.js") { h.set("Cache-Control", "no-cache"); h.set("Service-Worker-Allowed", "/"); } else if (p.startsWith("/icons/")) h.set("Cache-Control", "public, max-age=604800");
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
@@ -343,10 +336,16 @@ function harden(r, p, api, env) {
 
 const adminOK = (req, env, url) => env.ADMIN_TOKEN && (req.headers.get("Authorization") === "Bearer " + env.ADMIN_TOKEN || url.searchParams.get("t") === env.ADMIN_TOKEN);
 const founderOK = async (env, tk) => !!(tk && await env.ZV.get("founder:" + tk));
+const flOK = async (req, env, url, id) => {
+  if (await founderOK(env, req.headers.get("X-Founder-Token"))) return true;
+  const raw = await env.ZV.get("order:" + (url.searchParams.get("oid") || "")), o = raw && JSON.parse(raw);
+  const live = o && o.status === "approved" && (!o.exp || o.exp > Date.now());
+  return !!(o && o.key === url.searchParams.get("key") && live && (o.item === id || o.item === "up:" + id || ((isMem(o.item) || isBiz(o.item)) && memCovers(o.item, id))));
+};
 
 async function serveStatic(req, env) {
   if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
-    return new Response("TASKIFYRA: static files are not connected. Add the ASSETS binding ([assets] binding = \"ASSETS\" in wrangler.toml) and redeploy.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+    return new Response("Taskifyra: static files are not connected. Add the ASSETS binding ([assets] binding = \"ASSETS\" in wrangler.toml) and redeploy.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
   }
   const res = await env.ASSETS.fetch(req);
   const xr = res.headers.get("X-Robots-Tag");
@@ -363,10 +362,10 @@ async function guard(req, env, ctx, url, p) {
   const og = req.headers.get("Origin"), site = (env.SITE_URL || "").replace(/\/$/, "");
   if (og && og !== url.origin && og !== site && !["https://taskifyra.com", "https://www.taskifyra.com", "https://taskifyra.pages.dev"].includes(og)) { ctx.waitUntil(secAlert(env, "Blocked foreign origin", me_, og + " → " + p)); return json({ error: "Forbidden" }, 403); }
   if (req.method === "POST" && p !== "/api/tg-webhook" && p !== "/api/stripe-webhook") {
-    const txt = await req.text(), big = p === "/api/order" ? 700000 : p === "/api/translate" ? 150000 : p === "/api/notes" ? 250000 : 60000;
+    const txt = await req.text(), big = p === "/api/admin/file" ? 1500000 : p === "/api/order" ? 700000 : p === "/api/translate" ? 150000 : p === "/api/notes" ? 250000 : 60000;
     if (txt.length > big) return json({ error: "Too large" }, 413);
     const scan = txt.length > 5000 && p === "/api/order" ? txt.replace(/"proof":"[^"]*"/, "") : txt;
-    if (!/^\/api\/(login|signup)$/.test(p) && p !== "/api/translate" && BAD.test(scan)) {
+    if (!/^\/api\/(login|signup)$/.test(p) && p !== "/api/translate" && p !== "/api/admin/file" && BAD.test(scan)) {
       const c = await hit(env, "sec:bad:" + me_, 3600); ctx.waitUntil(secAlert(env, "Payload injection blocked", me_, p + " · " + scan.slice(0, 120)));
       if (c >= 3) await env.ZV.put("sec:ban:" + me_, "1", { expirationTtl: 3600 });
       return json({ error: "Invalid input" }, 400);
@@ -387,11 +386,6 @@ async function route(req, env, ctx, url, p) {
     if (p === "/api/admin/tg-setup") {
       if (!adminOK(req, env, url)) return json({ error: "auth" }, 401);
       return json(await tgApi(env, "setWebhook", { url: (env.SITE_URL || url.origin).replace(/\/$/, "") + "/api/tg-webhook", secret_token: await tgSecret(env), allowed_updates: ["callback_query"] }));
-    }
-    // public, read-only: real number of kits unlocked today (Bangladesh day). Used by the "unlocked today" trust badge.
-    if (p === "/api/proof-count" && req.method === "GET") {
-      const n = +(await env.ZV.get(cntKey(Date.now()))) || 0;
-      return json({ ok: true, today: n });
     }
     // founder-only security console
     if (p === "/api/admin/unlock" && req.method === "POST") {
@@ -414,12 +408,27 @@ async function route(req, env, ctx, url, p) {
       return new Response(Uint8Array.from(atob(m[2]), x => x.charCodeAt(0)), { headers: { "Content-Type": m[1], "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
     }
 
+    if (p === "/api/ask" && req.method === "POST") {
+      const acct = await sessUser(req, env).catch(() => null), lim = acct ? 20 : 4;
+      if (await hit(env, "ai:" + (acct ? acct.email : ip(req)) + ":" + dayOf(Date.now()), 86400) > lim) return json({ ok: false, error: "limit" }, 429);
+      if (!env.AI) return json({ ok: false, error: "AI binding missing" }, 503);
+      const d = await req.json().catch(() => ({})), q = clean(d.q, 400), ctx = String(d.ctx || "").slice(0, 3000), lg = LNG[d.lang] ? d.lang : "en";
+      if (q.length < 3) return json({ ok: false, error: "empty" }, 400);
+      let a = "";
+      try { const r = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", { messages: [{ role: "system", content: "You are Taskifyra's assistant for garment QC, freelancers, students, job seekers and clinics in Bangladesh. Answer in under 120 words in simple English, using the provided notes when they cover the question. If unsure, say so. Never state legal, medical or tax advice as fact; tell the user to verify with official sources." }, { role: "user", content: "Notes:\n" + ctx + "\n\nQuestion: " + q }], max_tokens: 300 }); a = String((r && r.response) || "").trim(); } catch (e) {}
+      if (!a) return json({ ok: false, error: "unavailable" }, 502);
+      if (lg !== "en") a = await trOne(env, lg, a);
+      return json({ ok: true, a });
+    }
+    if (p === "/api/files" && req.method === "GET") { const id = url.searchParams.get("id") || ""; if (!isTpl(id) || !(await flOK(req, env, url, id))) return json({ ok: false }, 403); const l = await env.ZV.list({ prefix: "fl:" + id + ":" }); return json({ ok: true, files: l.keys.map(k => ({ fid: k.name.split(":").pop(), name: (k.metadata && k.metadata.name) || "file" })) }); }
+    if (p === "/api/file" && req.method === "GET") { const id = url.searchParams.get("id") || "", fid = (url.searchParams.get("fid") || "").replace(/[^0-9a-f]/g, ""); if (!isTpl(id) || !(await flOK(req, env, url, id))) return json({ ok: false }, 403); const f = JSON.parse((await env.ZV.get("fl:" + id + ":" + fid)) || "null"); if (!f) return json({ ok: false }, 404); return new Response(Uint8Array.from(atob(f.b64), x => x.charCodeAt(0)), { headers: { "Content-Type": f.mime || "application/octet-stream", "Content-Disposition": 'attachment; filename="' + f.name + '"', "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } }); }
+    if (p === "/api/admin/file" && req.method === "POST") { if (!adminOK(req, env, url) && !(await founderOK(env, req.headers.get("X-Founder-Token")))) return json({ ok: false }, 401); const d = await req.json().catch(() => ({})), tp = (Array.isArray(d.tpls) ? d.tpls : []).map(String).filter(x => isTpl(x)).slice(0, 40), name = clean(d.name, 80).replace(/[^\w.\- ]/g, "_") || "file", b64 = String(d.b64 || ""); if (!tp.length || !/^[A-Za-z0-9+/=]+$/.test(b64) || b64.length > 1400000) return json({ ok: false, error: "Check template ids and file (max about 1 MB)" }, 400); const fid = rid(6); await Promise.all(tp.map(t => env.ZV.put("fl:" + t + ":" + fid, JSON.stringify({ name, mime: String(d.mime || "").slice(0, 100), b64 }), { metadata: { name } }))); return json({ ok: true, n: tp.length, fid }); }
     if (p === "/api/translate" && req.method === "POST") {
       const og = req.headers.get("Origin"); if (og && og !== url.origin) return json({ ok: false, error: "origin" }, 403);
       const d = await req.json().catch(() => ({}));
       if (!LNG[d.lang] || !Array.isArray(d.texts)) return json({ ok: false, error: "bad request" }, 400);
       if (!env.AI) return json({ ok: false, error: "Workers AI binding named AI is not set" }, 503);
-      let total = 0; const texts = d.texts.slice(0, 10).map(x => String(x).slice(0, 900)).filter(x => (total += x.length) <= 5000);
+      let total = 0; const texts = d.texts.slice(0, 24).map(x => String(x).slice(0, 900)).filter(x => (total += x.length) <= 9000);
       return json({ ok: true, out: await Promise.all(texts.map(x => trOne(env, d.lang, x))) });
     }
     if (p === "/api/order" && req.method === "POST") {
@@ -427,13 +436,12 @@ async function route(req, env, ctx, url, p) {
       const d = await req.json();
       if (!["bKash", "Nagad", "Rocket"].includes(d.method)) return json({ error: "method" }, 400);
       if (!d.trx || String(d.trx).trim().length < 4) return json({ error: "Enter the transaction ID" }, 400);
-      const o = await createOrder(env, d, d.method, "pending");
+      const acct = await sessUser(req, env).catch(() => null); const o = await createOrder(env, d, d.method, "pending", {}, acct);
       ctx.waitUntil((async () => {
-        const src = utmTag(o.utm);
-        const cap = `🛒 New ${o.method} order\nBuyer: ${o.customer.name} · ${o.customer.phone}\n${o.customer.email}\nKit: ${o.item}\nAmount: ${o.amount} ${o.currency}\nGateway: ${o.method} · TRX ${o.trx}${src ? "\nSource: " + src : ""}\nTime: ${bdt(o.at)}`;
+        const cap = `🛒 New ${o.method} order\nBuyer: ${o.customer.name} · ${o.customer.phone}\n${o.customer.email}\nKit: ${o.item}\nAmount: ${o.amount} ${o.currency}\nGateway: ${o.method} · TRX ${o.trx}\nTime: ${bdt(o.at)}${o.promo ? "\n🎁 50% welcome offer applied" : ""}`;
         const kb = { inline_keyboard: [[{ text: "✅ Approve", callback_data: "AP:" + o.id }, { text: "❌ Reject", callback_data: "RJ:" + o.id }], ...secKb(ip(req), "-").inline_keyboard] };
         if (!(o._proof && await tgPhoto(env, o._proof, cap, kb))) await tg(env, cap + (o._proof ? "" : "\n(no screenshot)"), kb);
-        await mail(env, env.ADMIN_EMAIL, `New ${o.method} order ${o.amount} BDT`, `<p>${esc(o.customer.name)} · ${esc(o.customer.phone)} · ${esc(o.customer.email)}<br>Item ${esc(o.item)} · TRX ${esc(o.trx)}${src ? "<br>Source " + esc(src) : ""}<br><a href="${esc(env.SITE_URL)}/admin">Open admin</a></p>`);
+        await mail(env, env.ADMIN_EMAIL, `New ${o.method} order ${o.amount} BDT`, `<p>${esc(o.customer.name)} · ${esc(o.customer.phone)} · ${esc(o.customer.email)}<br>Item ${esc(o.item)} · TRX ${esc(o.trx)}<br><a href="${esc(env.SITE_URL)}/admin">Open admin</a></p>`);
       })());
       return json({ id: o.id, key: o.key, status: o.status });
     }
@@ -444,12 +452,12 @@ async function route(req, env, ctx, url, p) {
     }
     if (p === "/api/stripe" && req.method === "POST") {
       if (!env.STRIPE_SECRET) return json({ error: "stripe not configured" }, 503);
-      const o = await createOrder(env, await req.json(), "Card", "awaiting_card");
+      const acct = await sessUser(req, env).catch(() => null); const o = await createOrder(env, await req.json(), "Card", "awaiting_card", {}, acct);
       const f = new URLSearchParams({ mode: "payment", success_url: env.SITE_URL + "/?paid=1", cancel_url: env.SITE_URL + "/", customer_email: o.customer.email, client_reference_id: o.id,
-        "line_items[0][quantity]": "1", "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(Math.round(o.amount * 100)), "line_items[0][price_data][product_data][name]": "TASKIFYRA " + o.item });
+        "line_items[0][quantity]": "1", "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(Math.round(o.amount * 100)), "line_items[0][price_data][product_data][name]": "Taskifyra " + o.item });
       const r = await (await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { Authorization: "Bearer " + env.STRIPE_SECRET, "Content-Type": "application/x-www-form-urlencoded" }, body: f })).json();
       if (!r.url) return json({ error: "stripe" }, 502);
-      ctx.waitUntil(tg(env, `💳 Card checkout started: ${o.item} · $${o.amount}\n${o.customer.name} · ${o.customer.email}${utmTag(o.utm) ? "\nSource: " + utmTag(o.utm) : ""}\n${bdt(o.at)}`));
+      ctx.waitUntil(tg(env, `💳 Card checkout started: ${o.item} · $${o.amount}\n${o.customer.name} · ${o.customer.email}\n${bdt(o.at)}`));
       return json({ url: r.url, id: o.id, key: o.key });
     }
     if (p === "/api/stripe-webhook" && req.method === "POST") {
@@ -484,7 +492,7 @@ async function route(req, env, ctx, url, p) {
       const note = String(d.note || "").slice(0, 300), name = String(d.name || id).slice(0, 80), lines = (Array.isArray(d.lines) ? d.lines : []).map(x => String(x).slice(0, 400)).slice(0, 40);
       if (from === 0) await env.ZV.put("rel:" + id, JSON.stringify({ v, note, lines, at: Date.now() }));
       const own = JSON.parse((await env.ZV.get("own:" + id)) || "[]"), batch = own.slice(from, from + 15), half = Math.round(PRICES[id] / 2);
-      await Promise.all(batch.map(em => mail(env, em, `🔔 New version of ${name} on TASKIFYRA`, `<p>Version ${v} of <b>${esc(name)}</b> is out. ${esc(note)}</p><p>Upgrade for half price (${half} BDT) at ${esc(env.SITE_URL || "")}.</p>`)));
+      await Promise.all(batch.map(em => mail(env, em, `🔔 New version of ${name} on Taskifyra`, `<p>Version ${v} of <b>${esc(name)}</b> is out. ${esc(note)}</p><p>Upgrade for half price (${half} BDT) at ${esc(env.SITE_URL || "")}.</p>`)));
       if (from === 0) await tg(env, `🔔 Release: ${id} v${v} · notifying ${own.length} owner(s)`);
       return json({ ok: true, total: own.length, done: Math.min(own.length, from + batch.length), next: from + 15 < own.length ? from + 15 : null });
     }
@@ -516,7 +524,7 @@ async function route(req, env, ctx, url, p) {
       if (!text.trim()) return json({ error: "empty" }, 400);
       const fb = { text, name: clean(d.name, 80), email: clean(d.email, 120), at: Date.now() };
       const [saved, sent] = await Promise.all([kvPut(env, "fb:" + fb.at + rid(2), JSON.stringify(fb)), tg(env, `📜 New feedback\nFrom: ${fb.name} <${fb.email}>\n\n${fb.text}`)]);
-      if (env.ADMIN_EMAIL) ctx.waitUntil(mail(env, env.ADMIN_EMAIL, "New feedback on TASKIFYRA", `<p>${esc(fb.name)} &lt;${esc(fb.email)}&gt;</p><p>${esc(fb.text)}</p>`));
+      if (env.ADMIN_EMAIL) ctx.waitUntil(mail(env, env.ADMIN_EMAIL, "New feedback on Taskifyra", `<p>${esc(fb.name)} &lt;${esc(fb.email)}&gt;</p><p>${esc(fb.text)}</p>`));
       if (!sent && !saved) return json({ ok: false, error: "Set TG_BOT_TOKEN, TG_CHAT_ID and the ZV KV binding" }, 503);
       return json({ ok: true, telegram: sent, saved });
     }
@@ -552,17 +560,20 @@ async function route(req, env, ctx, url, p) {
       return json({ code, count: +(await env.ZV.get("refn:" + code) || 0), exp: +(await env.ZV.get("bonus:" + em) || 0) });
     }
 
+    if (p === "/api/proof-count" && req.method === "GET") return json({ ok: true, today: +(await env.ZV.get("pc:" + dayOf(Date.now()))) || 0 });
     if (p === "/admin") {
       if (!adminOK(req, env, url)) return new Response(`<!doctype html><meta name=viewport content="width=device-width"><title>Admin</title><body style="font:16px system-ui;padding:20px"><form method="get"><p>Admin token</p><input name="t" type="password" autocomplete="current-password" style="padding:10px;width:240px"> <button style="padding:10px">Open</button></form>`, { status: 401, headers: { "Content-Type": "text/html", "X-Robots-Tag": "noindex" } });
       const ids = (await env.ZV.list({ prefix: "pend:" })).keys.map(k => k.name.slice(5));
       const T = encodeURIComponent(url.searchParams.get("t") || "");
       const rows = (await Promise.all(ids.map(i => env.ZV.get("order:" + i)))).filter(Boolean).map(JSON.parse).filter(o => o.status === "pending").sort((a, b) => b.at - a.at)
-        .map(o => `<tr><td>${esc(o.customer.name)}<br>${esc(o.customer.phone)}<br>${esc(o.customer.email)}</td><td>${esc(o.item)}</td><td>${o.amount} ${o.currency}<br>${esc(o.method)} ${esc(o.trx)}${utmTag(o.utm) ? `<br><small>↳ ${esc(utmTag(o.utm))}</small>` : ""}${o.pf ? `<br><a href="/api/admin/proof?id=${esc(o.id)}&t=${T}" target="_blank">📎 proof</a>` : ""}</td><td><button onclick="ap('${esc(o.id)}',this)">Approve</button></td></tr>`).join("");
+        .map(o => `<tr><td>${esc(o.customer.name)}<br>${esc(o.customer.phone)}<br>${esc(o.customer.email)}</td><td>${esc(o.item)}</td><td>${o.amount} ${o.currency}<br>${esc(o.method)} ${esc(o.trx)}${o.pf ? `<br><a href="/api/admin/proof?id=${esc(o.id)}&t=${T}" target="_blank">📎 proof</a>` : ""}</td><td><button onclick="ap('${esc(o.id)}',this)">Approve</button></td></tr>`).join("");
       // NOTE on escaping: "\\r?\\n" below is emitted to the browser as /\r?\n/ (a valid regex).
       return new Response(`<!doctype html><meta name=viewport content="width=device-width"><title>Admin</title><style>body{font:14px system-ui;padding:12px;max-width:720px}td{border-bottom:1px solid #ccc;padding:8px;vertical-align:top}input,textarea{display:block;width:100%;padding:8px;margin:4px 0;box-sizing:border-box}</style><h2>Pending orders</h2><table>${rows || "<tr><td>None</td></tr>"}</table>
 <h2>Release a new template version</h2><p>Owners are emailed and can upgrade at half price (valid 6 months). Members get the latest automatically.</p>
 <input id="r_id" placeholder="Template id, e.g. g1"><input id="r_nm" placeholder="Template name (for the email)"><input id="r_v" type="number" value="2" min="2"><input id="r_note" placeholder="One-line note: what is new"><textarea id="r_lines" rows="6" placeholder="New content, one line per item"></textarea><button onclick="rel()">Publish and notify owners</button> <span id="r_out"></span>
+<h2>Upload a downloadable file</h2><p>Buyers of these templates can download it (Excel/PDF, up to about 1 MB).</p><input id="u_t" placeholder="Template ids, e.g. g1,g11"><input id="u_f" type="file"><button onclick="upl()">Upload</button> <span id="u_out"></span>
 <script>
+function upl(){var f=document.getElementById('u_f').files[0],o=document.getElementById('u_out');if(!f)return;var r=new FileReader();r.onload=async function(){var b=String(r.result).split(',')[1];var res=await fetch('/api/admin/file?t='+tk(),{method:'POST',body:JSON.stringify({tpls:document.getElementById('u_t').value.split(',').map(function(s){return s.trim()}).filter(Boolean),name:f.name,mime:f.type,b64:b})});var j=await res.json();o.textContent=j.ok?'Uploaded to '+j.n+' template(s)':(j.error||'Failed')};r.readAsDataURL(f)}
 function tk(){return encodeURIComponent(new URLSearchParams(location.search).get('t'))}
 async function ap(id,b){b.disabled=true;const r=await fetch('/api/admin/approve?t='+tk(),{method:'POST',body:JSON.stringify({id})});b.textContent=r.ok?'Approved':'Failed'}
 async function rel(){const g=x=>document.getElementById(x),o=g('r_out');const body={id:g('r_id').value.trim(),name:g('r_nm').value,v:+g('r_v').value,note:g('r_note').value,lines:g('r_lines').value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean),from:0};o.textContent='Sending...';
@@ -574,6 +585,7 @@ for(;;){const r=await fetch('/api/admin/release?t='+tk(),{method:'POST',body:JSO
 }
 
 export default {
+  async scheduled(ev, env, ctx) { ctx.waitUntil(runReminders(env)); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname, api = p.startsWith("/api/") || p === "/admin";
     let res;
