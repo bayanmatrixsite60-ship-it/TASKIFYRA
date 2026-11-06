@@ -21,7 +21,7 @@ id = "58ce52869edb45078df0207be726ff8a"
 [[d1_databases]]
 binding = "DB"
 database_name = "taskifyra"
-database_id = "PASTE-YOUR-D1-DATABASE-ID-HERE"
+database_id = "​1e641585-5a03-414b-b063-4442f5bf78ae"
 
 # R2: dashboard -> R2 -> Create bucket "taskifyra-files" (keep it PRIVATE).
 [[r2_buckets]]
