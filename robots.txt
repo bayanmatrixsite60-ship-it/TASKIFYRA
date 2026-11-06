@@ -2,5 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /api/
+Disallow: /seller
+Disallow: /mk-admin
 
 Sitemap: https://taskifyra.pages.dev/sitemap.xml
