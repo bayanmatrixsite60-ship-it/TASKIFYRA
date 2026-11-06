@@ -16,12 +16,6 @@ binding = "AI"
 binding = "ZV"
 id = "58ce52869edb45078df0207be726ff8a"
 
-# D1: dashboard -> Storage & Databases -> D1 -> Create database "taskifyra" -> copy its Database ID here.
-# Tables are created automatically by the worker; there is no SQL to run.
-[[d1_databases]]
-binding = "DB"
-database_name = "taskifyra"
-database_id = "​83079599-f4a1-4a7d-aac7-d56d84275bff"
 
 [vars]
 SITE_URL = "https://taskifyra.pages.dev"
