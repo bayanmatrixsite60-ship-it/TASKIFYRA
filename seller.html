@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Seller dashboard — Taskifyra</title>
+<style>
+:root{--bg:#f6f8f7;--card:#fff;--ink:#10202b;--mut:#5b6b77;--line:#e1e8e5;--g:#0f8f6e;--gd:#0b6e55;--r:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1512;--card:#15201c;--ink:#e8f0ed;--mut:#9db0a8;--line:#24342e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI","Hind Siliguri",sans-serif}
+.top{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;max-width:1000px;margin:auto}.brand{font-weight:800;letter-spacing:.04em;color:var(--ink);text-decoration:none}
+main{max-width:1000px;margin:auto;padding:0 16px 48px}h1{font-size:24px;margin:8px 0 14px}h2{font-size:18px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:16px}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px}.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}.tile b{display:block;font-size:22px}.tile span{color:var(--mut);font-size:13px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}input,select,textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}textarea{min-height:70px}
+button,.btn{font:inherit;font-weight:700;border:0;border-radius:12px;padding:9px 14px;background:var(--g);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}button:hover{background:var(--gd)}button[disabled]{opacity:.6;cursor:wait}button.o{background:transparent;color:var(--g);border:1.5px solid var(--g)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1 1 140px}.row>button,.row>.btn{flex:0 0 auto}
+.msg{min-height:1.3em;font-size:14px;margin-top:8px}.ok{color:var(--g)}.err{color:var(--r)}.mut{color:var(--mut);font-size:14px}
+.prod{display:grid;gap:12px;grid-template-columns:90px 1fr;border-top:1px solid var(--line);padding:14px 0}.prod:first-of-type{border-top:0}.cv{width:90px;height:60px;border-radius:10px;background:linear-gradient(135deg,#d7dde2,#aab6bf) center/cover}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}.tag.live{color:var(--g);border-color:var(--g)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:70px}.bars i{flex:1;background:var(--g);border-radius:3px 3px 0 0;min-height:2px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="top"><a class="brand" href="/">TASKIFYRA</a><span class="mut" id="who"></span></div>
+<main id="app"><p class="mut">Loading…</p></main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let TOK="";try{TOK=JSON.parse(localStorage.getItem("zv_tok"))||""}catch(e){}
+const H=()=>({Authorization:"Bearer "+TOK});
+const api=async(path,body,method)=>{let j={},s=0;try{const r=await fetch(path,{method:method||(body?"POST":"GET"),headers:{...H(),...(body?{"Content-Type":"application/json"}:{})},body:body?JSON.stringify(body):undefined});s=r.status;j=await r.json()}catch(e){}j._s=s;return j};
+const say=(id,t,ok)=>{const e=$(id);if(e){e.className="msg "+(ok?"ok":"err");e.textContent=t||""}};
+const img=k=>k?"/api/media?k="+encodeURIComponent(k):"";
+let ME=null;
+
+// Shrink an image so it always fits the 2 MB limit.
+const shrink=f=>new Promise(ok=>{const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{URL.revokeObjectURL(u);const k=Math.min(1,1400/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);c.toBlob(b=>ok(b),"image/jpeg",.82)};im.onerror=()=>ok(null);im.src=u});
+
+async function load(){
+  if(!TOK){$("app").innerHTML='<div class="card"><h1>Please log in first</h1><p>Log in to your Taskifyra account on the home page, then open this page again.</p><a class="btn" href="/">Go to home</a></div>';return}
+  const r=await api("/api/seller/me");
+  if(r._s===401){$("app").innerHTML='<div class="card"><h1>Session expired</h1><p>Log in again on the home page, then reload this page.</p><a class="btn" href="/">Go to home</a></div>';return}
+  if(!r.ok){$("app").innerHTML='<div class="card"><p class="err">Could not load your dashboard. Please retry.</p></div>';return}
+  ME=r;r.store?dash():setup();
+}
+
+function setup(){
+  $("app").innerHTML=`<h1>Open your store</h1><div class="card"><label>Store address (3–30 letters, numbers, hyphens)</label><input id="sl" maxlength="30" placeholder="my-shop"><p class="mut">Your page will be taskifyra.pages.dev/s/<b id="pv">my-shop</b>. The address cannot be changed later.</p><label>Store name</label><input id="sn" maxlength="60"><label>About your store</label><textarea id="sb" maxlength="300"></textarea><div class="row"><button id="mk">Create store</button></div><p class="msg" id="sm"></p></div>`;
+  $("sl").oninput=()=>$("pv").textContent=$("sl").value.toLowerCase()||"my-shop";
+  $("mk").onclick=async()=>{$("mk").disabled=true;const r=await api("/api/seller/store",{slug:$("sl").value,name:$("sn").value,bio:$("sb").value});$("mk").disabled=false;r.ok?load():say("sm",r.error||"Could not create the store",0)};
+}
+
+function dash(){
+  const s=ME.store,st=ME.stats,mx=Math.max(1,...st.series.map(x=>x.v));
+  $("who").textContent=s.name||s.slug;
+  $("app").innerHTML=`
+  <h1>${esc(s.name||s.slug)} <a class="btn o" style="font-size:14px;padding:4px 12px" href="/s/${esc(s.slug)}" target="_blank" rel="noopener">View store ↗</a></h1>
+  <div class="tiles"><div class="tile"><b>${st.views}</b><span>Visits (30 days)</span></div><div class="tile"><b>${st.orders}</b><span>Sales (30 days)</span></div><div class="tile"><b>${st.revenue} ৳</b><span>Revenue (30 days)</span></div><div class="tile"><b>${st.balance} ৳</b><span>Available balance (after ${ME.fee}% fee)</span></div></div>
+  ${st.series.length?`<div class="card"><h2>Sales, last 30 days</h2><div class="bars">${st.series.map(x=>`<i title="${esc(x.d)}: ${Math.round(x.v)} ৳" style="height:${Math.max(3,x.v/mx*100)}%"></i>`).join("")}</div></div>`:""}
+  <div class="card"><h2>Store details</h2><label>Store name</label><input id="sn" maxlength="60" value="${esc(s.name)}"><label>About</label><textarea id="sb" maxlength="300">${esc(s.bio)}</textarea>
+   <div class="row"><div><label>Logo (square)</label><input type="file" id="lg" accept="image/*"></div><div><label>Banner (wide)</label><input type="file" id="bn" accept="image/*"></div></div>
+   <div class="row" style="margin-top:12px"><button id="ss">Save</button></div><p class="msg" id="sm"></p></div>
+  <div class="card"><h2>Products</h2><div id="pl"></div>
+   <h2 style="margin-top:18px">Add a product</h2><label>Title</label><input id="nt" maxlength="100"><label>Short description</label><textarea id="nd" maxlength="400"></textarea><label>Price (৳, 49–50000)</label><input id="np" type="number" min="49" max="50000" inputmode="numeric">
+   <div class="row" style="margin-top:12px"><button id="na">Add product</button></div><p class="msg" id="pm"></p>
+   <p class="mut">After adding, upload the product file (PDF, ZIP, Office, image, audio or video, up to 25 MB). The product goes live as soon as the file is uploaded.</p></div>
+  <div class="card"><h2>Payout</h2><p class="mut">Minimum 500 ৳. We send the money by mobile wallet after checking.</p>
+   <div class="row"><div><label>Method</label><select id="pmth"><option>bKash</option><option>Nagad</option><option>Rocket</option></select></div><div><label>Wallet number</label><input id="pn" inputmode="numeric" maxlength="11" placeholder="01XXXXXXXXX"></div><div><label>Amount (৳)</label><input id="pa" type="number" min="500" inputmode="numeric" value="${Math.max(500,st.balance)}"></div></div>
+   <div class="row" style="margin-top:12px"><button id="po">Request payout</button></div><p class="msg" id="pom"></p>
+   ${st.payouts.length?`<table><tr><th>Date</th><th>Amount</th><th>Status</th></tr>${st.payouts.map(x=>`<tr><td>${new Date(x.created_at).toLocaleDateString()}</td><td>${x.amount_bdt} ৳</td><td>${esc(x.status)}</td></tr>`).join("")}</table>`:""}</div>`;
+  renderProducts();
+  $("ss").onclick=async()=>{$("ss").disabled=true;const r=await api("/api/seller/store",{slug:s.slug,name:$("sn").value,bio:$("sb").value});
+    for(const [id,kind] of [["lg","logo"],["bn","banner"]]){const f=$(id).files[0];if(f&&r.ok){const b=await shrink(f);if(!b){say("sm","That image could not be read",0);continue}const u=await fetch("/api/seller/media?kind="+kind,{method:"PUT",headers:{...H(),"Content-Type":"image/jpeg"},body:b}).then(x=>x.json()).catch(()=>({}));if(!u.ok)say("sm",u.error||"Image upload failed",0)}}
+    $("ss").disabled=false;if(r.ok){say("sm","Saved",1);load()}else say("sm",r.error||"Could not save",0)};
+  $("na").onclick=async()=>{$("na").disabled=true;const r=await api("/api/seller/product",{title:$("nt").value,blurb:$("nd").value,price:$("np").value});$("na").disabled=false;r.ok?load():say("pm",r.error||"Could not add the product",0)};
+  $("po").onclick=async()=>{$("po").disabled=true;const r=await api("/api/seller/payout",{method:$("pmth").value,number:$("pn").value.trim(),amount:$("pa").value});$("po").disabled=false;r.ok?(say("pom","Payout requested",1),load()):say("pom",r.error||"Could not request payout",0)};
+}
+
+function renderProducts(){
+  const L=ME.products;$("pl").innerHTML=L.length?L.map(p=>`<div class="prod" data-id="${esc(p.id)}"><div class="cv" style="${p.cover_key?`background-image:url(${img(p.cover_key)})`:""}"></div><div>
+    <div class="row"><input class="t" value="${esc(p.title)}" maxlength="100"><input class="pr" type="number" value="${p.price_bdt}" style="max-width:110px"><span class="tag ${p.status==="live"?"live":""}">${p.has_file?esc(p.status):"needs file"}</span></div>
+    <textarea class="d" maxlength="400" style="margin-top:8px">${esc(p.blurb)}</textarea>
+    <div class="row" style="margin-top:8px"><div><label>Cover image</label><input type="file" class="cvf" accept="image/*"></div><div><label>${p.has_file?"Replace product file":"Product file"}</label><input type="file" class="pf"></div><button class="sv">Save</button></div><p class="msg"></p></div></div>`).join(""):'<p class="mut">No products yet.</p>';
+  $("pl").onclick=async e=>{const b=e.target.closest(".sv");if(!b)return;const box=b.closest(".prod"),id=box.dataset.id,m=box.querySelector(".msg");b.disabled=true;m.className="msg";m.textContent="Saving…";
+    try{
+      const r=await api("/api/seller/product/update",{id,title:box.querySelector(".t").value,blurb:box.querySelector(".d").value,price:box.querySelector(".pr").value});if(!r.ok)throw new Error(r.error||"Could not save");
+      const c=box.querySelector(".cvf").files[0];if(c){const bl=await shrink(c);const u=await fetch("/api/seller/media?kind=cover&pid="+id,{method:"PUT",headers:{...H(),"Content-Type":"image/jpeg"},body:bl}).then(x=>x.json());if(!u.ok)throw new Error(u.error||"Cover upload failed")}
+      const f=box.querySelector(".pf").files[0];if(f){m.textContent="Uploading file…";const u=await fetch("/api/seller/upload?pid="+id+"&name="+encodeURIComponent(f.name),{method:"PUT",headers:{...H(),"Content-Type":f.type||"application/octet-stream"},body:f}).then(x=>x.json());if(!u.ok)throw new Error(u.error||"File upload failed")}
+      load();
+    }catch(x){m.className="msg err";m.textContent=x.message||"Failed";b.disabled=false}};
+}
+load();
+})();
+</script>
+</body>
+</html>
