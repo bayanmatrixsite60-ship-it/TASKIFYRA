@@ -741,6 +741,40 @@ async function bkashRoutes(req, env, url, p, h) {
   return J({ ok: false }, 404);
 }
 
+
+// ---------- self-creating D1 schema: no SQL to paste, runs once per isolate, safe to repeat ----------
+const SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS users(email TEXT PRIMARY KEY,name TEXT,phone TEXT UNIQUE,salt TEXT,hash TEXT,created_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS stores(id TEXT PRIMARY KEY,owner_email TEXT NOT NULL,slug TEXT UNIQUE NOT NULL,name TEXT,bio TEXT,logo_key TEXT,banner_key TEXT,payout_method TEXT,payout_number TEXT,status TEXT DEFAULT 'live',created_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY,store_id TEXT,title TEXT,blurb TEXT,price_bdt INTEGER NOT NULL,r2_key TEXT,file_name TEXT,cover_key TEXT,status TEXT DEFAULT 'live',created_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY,okey TEXT,item TEXT,method TEXT,currency TEXT,amount REAL,trx TEXT,name TEXT,email TEXT,phone TEXT,status TEXT,created_at INTEGER,approved_at INTEGER,store_id TEXT,fee_bdt INTEGER DEFAULT 0,proof_key TEXT)",
+  "CREATE TABLE IF NOT EXISTS reviews(id TEXT PRIMARY KEY,product_id TEXT,email TEXT,stars INTEGER,body TEXT,created_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS payouts(id TEXT PRIMARY KEY,store_id TEXT,amount_bdt INTEGER,status TEXT DEFAULT 'pending',created_at INTEGER,paid_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS views(store_id TEXT,day TEXT,n INTEGER DEFAULT 0,PRIMARY KEY(store_id,day))",
+  "CREATE INDEX IF NOT EXISTS o_email ON orders(email)",
+  "CREATE INDEX IF NOT EXISTS o_st ON orders(status,approved_at)",
+  "CREATE INDEX IF NOT EXISTS o_trx ON orders(trx)",
+  "CREATE INDEX IF NOT EXISTS o_store ON orders(store_id,status,approved_at)",
+  "CREATE INDEX IF NOT EXISTS p_store ON products(store_id)",
+  "CREATE INDEX IF NOT EXISTS y_store ON payouts(store_id,status)",
+];
+let _ready = null;
+function ensureSchema(env) {
+  if (!env.DB) return Promise.resolve();
+  if (_ready) return _ready;
+  _ready = (async () => {
+    try {
+      await env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)));
+      // Older (v9) databases: add the columns that were introduced later.
+      for (const [t, c] of [["stores", "banner_key"], ["products", "cover_key"], ["orders", "proof_key"]]) {
+        try { await env.DB.prepare(`SELECT ${c} FROM ${t} LIMIT 0`).run(); }
+        catch (e) { try { await env.DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`).run(); } catch (e2) { console.log("alter", t, c, String(e2 && e2.message)); } }
+      }
+    } catch (e) { console.log("ensureSchema", String(e && e.message)); _ready = null; }
+  })();
+  return _ready;
+}
+
 // ---------- seller stores, marketplace orders, media, payouts, signed downloads, reviews, admin ----------
 const METHODS = ["bKash", "Nagad", "Rocket"];
 const FILE_OK = /\.(pdf|zip|rar|7z|docx?|xlsx?|pptx?|csv|txt|md|epub|png|jpe?g|webp|mp3|mp4|json|psd|ai|fig)$/i;
@@ -1013,8 +1047,8 @@ async function mirrorStatus(env, id, status) {
 // ---------- deployment self-check (admin only): shows exactly what is still missing ----------
 async function health(env) {
   const out = { ok: true, problems: [] }, bad = (t) => { out.ok = false; out.problems.push(t); };
-  try { out.tables = {}; for (const t of ["users", "stores", "products", "orders", "reviews", "payouts", "views"]) out.tables[t] = (await first(env, `SELECT COUNT(*) n FROM ${t}`)).n; } catch (e) { bad("D1 tables missing: run schema.sql in the D1 Console (" + String(e.message).slice(0, 80) + ")"); }
-  try { await first(env, "SELECT banner_key,cover_key,proof_key FROM stores s, products p, orders o LIMIT 1"); } catch (e) { bad("D1 is missing columns banner_key/cover_key/proof_key: use the new schema.sql or run the ALTER lines"); }
+  try { out.tables = {}; for (const t of ["users", "stores", "products", "orders", "reviews", "payouts", "views"]) out.tables[t] = (await first(env, `SELECT COUNT(*) n FROM ${t}`)).n; } catch (e) { bad("D1 tables missing: the database could not be initialised (" + String(e.message).slice(0, 80) + ")"); }
+  try { await first(env, "SELECT banner_key,cover_key,proof_key FROM stores s, products p, orders o LIMIT 1"); } catch (e) { bad("D1 is missing columns banner_key/cover_key/proof_key: the automatic upgrade failed, check the worker logs"); }
   try { await env.FILES.list({ limit: 1 }); } catch (e) { bad("R2 bucket FILES not reachable"); }
   out.secrets = { RESEND_API_KEY: !!env.RESEND_API_KEY, SESSION_SECRET: !!env.SESSION_SECRET, ADMIN_API_KEY: !!env.ADMIN_API_KEY, bkash_auto: bkashOn(env) };
   for (const k of ["RESEND_API_KEY", "SESSION_SECRET", "ADMIN_API_KEY"]) if (!env[k]) bad("Secret missing: " + k);
@@ -1036,14 +1070,14 @@ async function health(env) {
   return out;
 }
 
-return { J, esc, routes, bkashRoutes, mirrorNew, mirrorStatus };
+return { J, esc, routes, bkashRoutes, mirrorNew, mirrorStatus, ensureSchema };
 })();
 
 // ======================================= SECTION 3: ENTRY POINT =======================================
 // Order of handling:
 //   1. block sensitive paths   2. private pages (/seller, /mk-admin)   3. sitemap   4. /s/<store> pages
 //   5. marketplace + bKash APIs (D1 + R2)   6. everything else -> Legacy core (login, catalogue orders, admin, AI, static files)
-const { J, esc, routes, bkashRoutes, mirrorNew, mirrorStatus } = Market;
+const { J, esc, routes, bkashRoutes, mirrorNew, mirrorStatus, ensureSchema } = Market;
 
 const SEC = {
   "X-Content-Type-Options": "nosniff",
@@ -1099,6 +1133,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(Legacy.scheduled(event, env, ctx));
     if (!env.DB) return;
+    await ensureSchema(env);
     const base = env.SITE_URL || "https://taskifyra.pages.dev";
     const rows = (await env.DB.prepare("SELECT id,okey FROM orders WHERE status='pending' AND item NOT LIKE 'x%' AND okey!='' AND created_at>? ORDER BY created_at DESC LIMIT 40").bind(Date.now() - 30 * 864e5).all()).results;
     for (const o of rows) {
@@ -1115,6 +1150,18 @@ export default {
     const p = url.pathname.replace(/\/+$/, "") || "/";
     try {
       if (BLOCKED.test(p)) return secure(new Response("Not found", { status: 404 }));
+
+      // Phone-friendly layout: /img/x.jpg and /icons/x.png are also found when the file sits flat in the repo root.
+      const fm = p.match(/^\/(img|icons)\/([\w.-]+)$/);
+      if (fm && (req.method === "GET" || req.method === "HEAD")) {
+        let r = await env.ASSETS.fetch(req);
+        if (r.status === 404) r = await env.ASSETS.fetch(new Request(new URL("/" + fm[2], url), req));
+        const o = new Response(r.body, r);
+        if (r.ok) o.headers.set("Cache-Control", "public, max-age=604800");
+        return secure(o);
+      }
+
+      await ensureSchema(env);
 
       if (PAGES.has(p)) {
         const r = new Response((await asset(env, url, PAGES.get(p))).body, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "no-store" } });
