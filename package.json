@@ -1,0 +1,1 @@
+{ "name": "taskifyra", "private": true, "type": "module", "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy", "db:init": "wrangler d1 execute taskifyra --file=schema.sql --remote" }, "devDependencies": { "wrangler": "^4" } }
