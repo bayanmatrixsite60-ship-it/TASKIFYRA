@@ -1,0 +1,10 @@
+-- For an EXISTING v9 database. Run ONCE:
+--   npx wrangler d1 execute taskifyra --file=migrations/0002_v10.sql --remote
+-- If a line says "duplicate column name", that column already exists: delete that line and run again.
+ALTER TABLE stores ADD COLUMN banner_key TEXT;
+ALTER TABLE products ADD COLUMN cover_key TEXT;
+ALTER TABLE orders ADD COLUMN proof_key TEXT;
+CREATE TABLE IF NOT EXISTS views(store_id TEXT,day TEXT,n INTEGER DEFAULT 0,PRIMARY KEY(store_id,day));
+CREATE INDEX IF NOT EXISTS o_trx ON orders(trx);
+CREATE INDEX IF NOT EXISTS o_store ON orders(store_id,status,approved_at);
+CREATE INDEX IF NOT EXISTS y_store ON payouts(store_id,status);
