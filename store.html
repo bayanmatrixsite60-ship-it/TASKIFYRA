@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Store — Taskifyra</title>
+<meta name="description" content="Digital products on Taskifyra">
+<meta property="og:title" content="Store — Taskifyra">
+<meta property="og:description" content="Digital products on Taskifyra">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0f8f6e">
+<style>
+:root{--bg:#f6f8f7;--card:#fff;--ink:#10202b;--mut:#5b6b77;--line:#e1e8e5;--g:#0f8f6e;--gd:#0b6e55}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1512;--card:#15201c;--ink:#e8f0ed;--mut:#9db0a8;--line:#24342e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI","Hind Siliguri",sans-serif}
+a{color:var(--g)}header.top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;max-width:1000px;margin:auto}
+.brand{font-weight:800;letter-spacing:.04em;text-decoration:none;color:var(--ink)}
+.ban{width:100%;aspect-ratio:3/1;background:linear-gradient(135deg,#0f8f6e,#0b4f3f);background-size:cover;background-position:center}
+.wrap{max-width:1000px;margin:auto;padding:0 16px 48px}
+.hd{display:flex;gap:14px;align-items:center;margin:-28px 0 18px}.logo{width:72px;height:72px;border-radius:18px;border:3px solid var(--bg);background:#d7dde2 center/cover;flex:none}
+h1{margin:18px 0 0;font-size:clamp(22px,5vw,30px);line-height:1.2}.bio{color:var(--mut);margin:2px 0 0}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.pc{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.cv{aspect-ratio:16/10;background:linear-gradient(135deg,#d7dde2,#aab6bf) center/cover}
+.pb{padding:14px;display:flex;flex-direction:column;gap:8px;flex:1}.pb h3{margin:0;font-size:17px}.pb p{margin:0;color:var(--mut);font-size:14px;flex:1}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px}.price{font-weight:800}.st{color:#d98c00;font-size:13px}
+button,.btn{font:inherit;font-weight:700;border:0;border-radius:12px;padding:10px 16px;background:var(--g);color:#fff;cursor:pointer}button:hover{background:var(--gd)}button[disabled]{opacity:.6;cursor:wait}
+button.o{background:transparent;color:var(--g);border:1.5px solid var(--g)}
+.empty,.note{color:var(--mut)}.msg{padding:12px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);margin:0 0 16px}.msg.ok{border-color:var(--g)}
+dialog{border:0;border-radius:18px;padding:20px;max-width:440px;width:calc(100% - 24px);background:var(--card);color:var(--ink)}dialog::backdrop{background:#0008}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}input,select{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.err{color:#c0392b;min-height:1.3em;font-size:14px}.pay{background:var(--bg);border:1px dashed var(--g);border-radius:12px;padding:10px 12px;margin-top:10px;font-size:14px}
+footer{text-align:center;color:var(--mut);font-size:13px;padding:24px 16px}
+</style>
+</head>
+<body>
+<header class="top"><a class="brand" href="/">TASKIFYRA</a><a href="/">Home</a></header>
+<div class="ban" id="ban"></div>
+<main class="wrap">
+  <div class="hd"><div class="logo" id="logo"></div></div>
+  <h1 id="nm">&nbsp;</h1><p class="bio" id="bio"></p>
+  <div id="msg"></div>
+  <div class="grid" id="grid" style="margin-top:18px"></div>
+</main>
+<footer>Payments are checked by the Taskifyra team before your download unlocks.</footer>
+
+<dialog id="dlg"><form method="dialog" id="f" novalidate>
+  <h2 id="dt" style="margin:0 0 4px">Buy</h2><p class="note" id="dp" style="margin:0"></p>
+  <label for="n">Full name</label><input id="n" autocomplete="name" maxlength="80">
+  <label for="p">Mobile (01XXXXXXXXX)</label><input id="p" inputmode="numeric" autocomplete="tel" maxlength="14">
+  <label for="e">Email</label><input id="e" type="email" autocomplete="email" maxlength="120">
+  <label for="m">Payment method</label><select id="m"></select>
+  <div class="pay" id="pd"></div>
+  <div id="manual">
+    <label for="x">Transaction ID (TrxID)</label><input id="x" maxlength="20" autocapitalize="characters">
+    <label for="s">Payment screenshot (optional)</label><input id="s" type="file" accept="image/*">
+  </div>
+  <p class="err" id="er" role="alert"></p>
+  <div class="row"><button type="button" class="o" id="cx">Cancel</button><button type="submit" id="go">Submit</button></div>
+</form></dialog>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const slug=(location.pathname.match(/^\/s\/([^/]+)/)||[])[1]||"";
+const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let DATA=null,cur=null;
+const img=k=>k?"/api/media?k="+encodeURIComponent(k):"";
+const note=(h,ok)=>{$("msg").innerHTML=h?`<div class="msg ${ok?"ok":""}">${h}</div>`:""};
+
+async function load(){
+  const r=await fetch("/api/store?slug="+encodeURIComponent(slug)).then(x=>x.json()).catch(()=>null);
+  if(!r||!r.ok){$("nm").textContent="Store not found";$("grid").innerHTML='<p class="empty">This store does not exist or is not live.</p>';return}
+  DATA=r;const s=r.store;document.title=(s.name||slug)+" — Taskifyra";
+  $("nm").textContent=s.name||slug;$("bio").textContent=s.bio||"";
+  if(s.banner_key)$("ban").style.backgroundImage=`url(${img(s.banner_key)})`;
+  if(s.logo_key)$("logo").style.backgroundImage=`url(${img(s.logo_key)})`;
+  const avg={};r.reviews.forEach(v=>{(avg[v.product_id]=avg[v.product_id]||[]).push(v.stars)});
+  $("grid").innerHTML=r.products.length?r.products.map(p=>{const a=avg[p.id],st=a?`<span class="st">★ ${(a.reduce((x,y)=>x+y,0)/a.length).toFixed(1)} (${a.length})</span>`:"<span></span>";
+    return `<article class="pc"><div class="cv" style="${p.cover_key?`background-image:url(${img(p.cover_key)})`:""}"></div><div class="pb"><h3>${esc(p.title)}</h3><p>${esc(p.blurb)}</p><div class="row"><span class="price">${p.price_bdt} ৳</span>${st}</div><button data-b="${esc(p.id)}">Buy now</button></div></article>`}).join(""):'<p class="empty">No products yet. Please check back soon.</p>';
+}
+
+function shrink(f){return new Promise(ok=>{const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{URL.revokeObjectURL(u);const k=Math.min(1,1000/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);ok(c.toDataURL("image/jpeg",.72))};im.onerror=()=>ok("");im.src=u})}
+
+function openBuy(pid){
+  cur=DATA.products.find(p=>p.id===pid);if(!cur)return;
+  const pay=DATA.pay,u=LS.get("zv_user",{})||{};
+  $("dt").textContent=cur.title;$("dp").textContent=cur.price_bdt+" ৳";$("er").textContent="";
+  $("n").value=u.name||"";$("p").value=u.phone||"";$("e").value=u.email||"";
+  $("m").innerHTML=pay.methods.map(m=>`<option>${m}</option>`).join("");
+  paint();$("dlg").showModal();
+}
+function paint(){
+  const pay=DATA.pay,m=$("m").value,auto=pay.auto&&m==="bKash";
+  $("manual").style.display=auto?"none":"";
+  $("pd").innerHTML=auto?"You will pay securely inside bKash and your download unlocks automatically.":`Send <b>${cur.price_bdt} ৳</b> by ${esc(m)} (Send Money) to <b>${esc((pay.numbers||{})[m]||"")}</b>, then enter the TrxID below.`;
+  $("go").textContent=auto?"Pay with bKash":"Submit payment";
+}
+$("m").onchange=paint;$("cx").onclick=()=>$("dlg").close();
+$("grid").onclick=e=>{const b=e.target.closest("[data-b]");b&&openBuy(b.dataset.b)};
+
+$("f").onsubmit=async e=>{
+  e.preventDefault();const er=$("er");er.textContent="";
+  const m=$("m").value,auto=DATA.pay.auto&&m==="bKash",body={item:cur.id,method:m,auto,trx:$("x").value.trim(),customer:{name:$("n").value.trim(),email:$("e").value.trim(),phone:$("p").value.trim()}};
+  if(!body.customer.name||!/^01\d{9}$/.test(body.customer.phone.replace(/^\+?88/,""))||!/^\S+@\S+\.\S+$/.test(body.customer.email)){er.textContent="Enter your name, a valid mobile number (01XXXXXXXXX) and email.";return}
+  if(!auto&&body.trx.length<6){er.textContent="Enter the TrxID from your payment SMS.";return}
+  $("go").disabled=true;
+  try{
+    const f=$("s").files&&$("s").files[0];if(!auto&&f)body.proof=await shrink(f);
+    const r=await fetch("/api/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(x=>x.json());
+    if(!r.ok){er.textContent=r.error||"Could not submit. Please retry.";$("go").disabled=false;return}
+    LS.set("zv_user",{...(LS.get("zv_user",{})||{}),name:body.customer.name,email:body.customer.email,phone:body.customer.phone});
+    const o=LS.get("mk_orders",[]);o.push({id:r.id,key:r.key,pid:cur.id,slug,t:cur.title});LS.set("mk_orders",o.slice(-30));
+    if(auto){const b=await fetch("/api/bkash/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({oid:r.id,key:r.key})}).then(x=>x.json());if(b.ok&&b.url){location.href=b.url;return}}
+    $("dlg").close();$("go").disabled=false;history.replaceState(null,"","?o="+r.id+"."+r.key);check();
+  }catch(x){er.textContent="You seem to be offline. Reconnect and retry.";$("go").disabled=false}
+};
+
+// Order status + download. Works from ?o=<id>.<key> (e-mail link) or from this browser's saved orders.
+async function check(){
+  const q=new URLSearchParams(location.search).get("o")||"",[qi,qk]=q.split("."),list=LS.get("mk_orders",[]).filter(o=>o.slug===slug);
+  if(qi&&qk&&!list.find(o=>o.id===qi))list.push({id:qi,key:qk});
+  if(new URLSearchParams(location.search).get("pay")==="failed")note("The bKash payment was not completed. You can try again or pay with Send Money.");
+  const out=[];
+  for(const o of list.slice(-5)){
+    const r=await fetch(`/api/order?id=${encodeURIComponent(o.id)}&key=${encodeURIComponent(o.key)}`).then(x=>x.json()).catch(()=>null);if(!r||!r.status)continue;
+    const t=esc((o.t||(DATA&&(DATA.products.find(p=>p.id===r.item)||{}).title)||"Your purchase"));
+    if(r.status==="approved")out.push(`✅ <b>${t}</b> is unlocked. <button data-d="${esc(o.id)}|${esc(o.key)}|${esc(r.item)}">Download</button>`);
+    else if(r.status==="rejected")out.push(`❌ <b>${t}</b>: payment could not be verified. Contact support with your TrxID.`);
+    else out.push(`⏳ <b>${t}</b>: payment received, waiting for approval. This page updates by itself.`);
+  }
+  if(out.length)$("msg").innerHTML=out.map(h=>`<div class="msg ${h.startsWith("✅")?"ok":""}">${h}</div>`).join("");
+  if(out.some(h=>h.startsWith("⏳")))setTimeout(check,20000);
+}
+$("msg").onclick=async e=>{const b=e.target.closest("[data-d]");if(!b)return;const[i,k,p]=b.dataset.d.split("|");b.disabled=true;
+  const r=await fetch(`/api/dl?oid=${encodeURIComponent(i)}&key=${encodeURIComponent(k)}&pid=${encodeURIComponent(p)}`).then(x=>x.json()).catch(()=>null);
+  b.disabled=false;if(r&&r.ok)location.href=r.url;else alert("Download is not available yet. Please try again shortly.")};
+
+load().then(check);
+})();
+</script>
+</body>
+</html>
