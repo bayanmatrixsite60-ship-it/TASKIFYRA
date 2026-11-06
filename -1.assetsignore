@@ -1,0 +1,14 @@
+# Belt and braces: even if one of these is ever copied into public/, it will not be uploaded.
+_worker.js
+_routes.json
+*.sql
+*.toml
+*.zip
+*.map
+*.md
+.git*
+.dev.vars
+.env*
+node_modules
+src
+migrations
