@@ -2,54 +2,47 @@ name = "taskifyras"
 main = "_worker.js"
 compatibility_date = "2025-09-01"
 
-# Only the contents of ./public are ever served to the internet.
-# Worker code (_worker.js, src/), schema.sql, migrations/ and zips live OUTSIDE it, so they can never be downloaded.
+# Flat layout: all site files sit in the repo root. The file ".assetsignore" hides the backend files
+# (_worker.js, wrangler.toml, package.json ...) so they are never downloadable.
 [assets]
-directory = "./public"
+directory = "./"
 binding = "ASSETS"
 run_worker_first = true
 
-# Workers AI (live translation)
 [ai]
 binding = "AI"
 
-# KV (sessions, rate limits)
 [[kv_namespaces]]
 binding = "ZV"
 id = "58ce52869edb45078df0207be726ff8a"
 
-# D1: create with  `npx wrangler d1 create taskifyra`  then paste the printed database_id here.
+# D1: dashboard -> Storage & Databases -> D1 -> Create database "taskifyra" -> copy its Database ID here.
+# Tables are created automatically by the worker; there is no SQL to run.
 [[d1_databases]]
 binding = "DB"
 database_name = "taskifyra"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "PASTE-YOUR-D1-DATABASE-ID-HERE"
 
-# R2: create with  `npx wrangler r2 bucket create taskifyra-files`  (keep it PRIVATE: no public access / no custom domain).
+# R2: dashboard -> R2 -> Create bucket "taskifyra-files" (keep it PRIVATE).
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "taskifyra-files"
 
-# Plain, NON-secret values only.
 [vars]
 SITE_URL = "https://taskifyra.pages.dev"
 ADMIN_EMAIL = "bayanmatrixsite60@gmail.com"
-# A display name + a sender address on a domain verified in Resend. NEVER put an API key here.
 FROM_EMAIL = "Taskifyra <orders@YOUR-VERIFIED-DOMAIN.com>"
 FEE_PCT = "10"
-# Numbers customers send money to (change per method if you use different wallets)
 PAY_BKASH = "01812410928"
 PAY_NAGAD = "01812410928"
 PAY_ROCKET = "01812410928"
-# bKash automatic payment (optional, set together with the BKASH_* secrets):
+# bKash automatic payment (optional; also needs the 4 BKASH_* secrets). Remove the leading # to enable:
 # BKASH_BASE = "https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized/checkout/"
 
-# Every 10 minutes: sync catalogue-order approvals into D1.
 [triggers]
 crons = ["*/10 * * * *"]
 
-# SECRETS (never in this file). Set each with:  npx wrangler secret put NAME
-#   RESEND_API_KEY      Resend API key (create a NEW one: the old key was exposed in this file)
-#   SESSION_SECRET      random 32+ chars, signs download links   (openssl rand -hex 32)
-#   ADMIN_API_KEY       random 32+ chars, protects /api/admin/market/*
-#   BKASH_USER, BKASH_PASS, BKASH_APP_KEY, BKASH_APP_SECRET   (only if you enable bKash automatic payment)
-# Plus every secret your existing (legacy) worker already uses.
+# SECRETS (never in this file). Dashboard -> Worker -> Settings -> Variables and Secrets -> Add (type: Secret):
+#   ADMIN_TOKEN, FOUNDER_CODE, SESSION_SECRET (32+ random chars), ADMIN_API_KEY (32+ random chars),
+#   RESEND_API_KEY (create a NEW key), TG_BOT_TOKEN, TG_CHAT_ID,
+#   optional: PW_PEPPER, BKASH_USER, BKASH_PASS, BKASH_APP_KEY, BKASH_APP_SECRET
