@@ -1,57 +1,298 @@
-<!doctype html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>TASKIFYRA</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;600;700&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#EEF3F6;--card:#fff;--ink:#10202B;--mut:#5B6B77;--acc:#0F8F6E;--gold:#F2A900;--line:#D5DEE4;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:dark){:root{--bg:#0C161D;--card:#14232D;--ink:#E8EEF2;--mut:#93A4B0;--line:#243642}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 'Hind Siliguri','Noto Sans Bengali','Plus Jakarta Sans',system-ui,sans-serif}
-.w{max-width:960px;margin:0 auto;padding:0 16px 40px}a{color:var(--acc)}
-.ban{height:150px;background:linear-gradient(120deg,#0F8F6E,#10202B);background-size:cover;background-position:center}@media(min-width:720px){.ban{height:220px}}
-.pf{display:flex;gap:14px;align-items:flex-end;margin-top:-44px}.av{width:88px;height:88px;border-radius:50%;border:4px solid var(--bg);background:var(--acc);color:#fff;display:grid;place-items:center;font:800 34px 'Plus Jakarta Sans';object-fit:cover;flex:none}
-h1,h2,h3{font-family:'Plus Jakarta Sans','Hind Siliguri',sans-serif;margin:0}h1{font-size:26px}h2{font-size:20px;margin:28px 0 12px}.mut{color:var(--mut)}.st{color:var(--gold);letter-spacing:1px}
-.g{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}.c{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}.cp{padding:14px}
-.cv{aspect-ratio:16/10;background:linear-gradient(135deg,#0F8F6E,#1c3a4a);display:grid;place-items:center;color:#fff;font:800 40px 'Plus Jakarta Sans';width:100%;object-fit:cover}
-.pr{font:800 20px 'Plus Jakarta Sans'}.b{display:inline-block;border:0;border-radius:10px;background:var(--acc);color:#fff;font:600 15px inherit;padding:10px 16px;cursor:pointer;text-decoration:none}.b.o{background:none;color:var(--acc);border:1px solid var(--acc)}.b:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
-.tabs{display:flex;gap:6px;overflow-x:auto;padding:12px 0;position:sticky;top:env(safe-area-inset-top,0);background:var(--bg);z-index:5}.tabs button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 16px;font:600 15px inherit;white-space:nowrap;cursor:pointer}.tabs .on{background:var(--acc);color:#fff;border-color:var(--acc)}
-.k{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}@media(min-width:720px){.k{grid-template-columns:repeat(4,1fr)}}.k .c{padding:14px}.k b{display:block;font:800 24px 'Plus Jakarta Sans'}
-label{display:block;font-weight:600;margin:12px 0 4px}input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
-table{width:100%;border-collapse:collapse}td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.msg{margin:10px 0;font-weight:600}
-</style></head><body><div id="app"></div><script>
-const $=s=>document.querySelector(s),ls=k=>{try{const v=localStorage.getItem(k);try{return JSON.parse(v)}catch(e){return v}}catch(e){return null}};
-let lang=ls("zv_lang")==="en"?"en":"bn";const TK=ls("zv_tok")||"";
-const D={bn:{buy:"কিনুন",rv:"⭐ রিভিউ",norv:"এখনও কোনো রিভিউ নেই। ক্রেতারা রিভিউ দিলে এখানে দেখা যাবে।",pd:"🛍 প্রোডাক্ট",nopd:"এই স্টোরে এখনও কোনো প্রোডাক্ট নেই।",nf:"স্টোরটি খুঁজে পাওয়া যায়নি।",pw:"চালিত",ov:"📊 ওভারভিউ",pr:"🛍 প্রোডাক্ট",po:"💸 পেআউট",se:"⚙️ স্টোর সেটিংস",vw:"👁 ভিউ",od:"🧾 অর্ডার",cr:"🎯 ক্রয়ের হার",rev:"💰 আয়",l30:"শেষ ৩০ দিন",li:"ড্যাশবোর্ড দেখতে লগইন করুন।",lib:"লগইন পেজে যান",cs:"আপনার স্টোর তৈরি করুন",sl:"স্টোরের ঠিকানা (ইংরেজি ছোট অক্ষর, সংখ্যা ও হাইফেন)",nm:"স্টোরের নাম",bio:"সংক্ষিপ্ত পরিচিতি",sv:"সংরক্ষণ করুন",ti:"শিরোনাম",pc:"দাম (৳)",bl:"বিবরণ",cv:"কভার ছবি",fl:"ডিজিটাল ফাইল (সর্বোচ্চ ২৫ MB)",ad:"নতুন প্রোডাক্ট যোগ করুন",ed:"সম্পাদনা",live:"চালু",draft:"খসড়া",bal:"উত্তোলনযোগ্য ব্যালেন্স",fee:"প্ল্যাটফর্ম ফি",rq:"পেআউটের অনুরোধ করুন",mt:"মাধ্যম",nu:"মোবাইল নম্বর (01XXXXXXXXX)",am:"পরিমাণ (৳)",mn:"সর্বনিম্ন পেআউট ৫০০ টাকা।",hi:"পেআউটের ইতিহাস",pen:"অপেক্ষমাণ",paid:"পরিশোধিত",rej:"বাতিল",lg:"লোগো",bn:"ব্যানার",ok:"সংরক্ষিত হয়েছে।",er:"সমস্যা হয়েছে। আবার চেষ্টা করুন।",up:"আপলোড হচ্ছে…",nof:"ফাইল নেই",per:"শেষ ৩০ দিনে প্রতিদিনের আয়",nod:"এখনও কোনো বিক্রি হয়নি।"},
-en:{buy:"Buy",rv:"⭐ Reviews",norv:"No reviews yet. Buyers' reviews will appear here.",pd:"🛍 Products",nopd:"This store has no products yet.",nf:"Store not found.",pw:"Powered by",ov:"📊 Overview",pr:"🛍 Products",po:"💸 Payouts",se:"⚙️ Store settings",vw:"👁 Views",od:"🧾 Orders",cr:"🎯 Conversion",rev:"💰 Revenue",l30:"Last 30 days",li:"Log in to see your dashboard.",lib:"Go to log in",cs:"Create your store",sl:"Store address (lowercase letters, numbers, hyphens)",nm:"Store name",bio:"Short bio",sv:"Save",ti:"Title",pc:"Price (BDT)",bl:"Description",cv:"Cover image",fl:"Digital file (max 25 MB)",ad:"Add a product",ed:"Edit",live:"Live",draft:"Draft",bal:"Available balance",fee:"Platform fee",rq:"Request a payout",mt:"Method",nu:"Mobile number (01XXXXXXXXX)",am:"Amount (BDT)",mn:"Minimum payout is 500 BDT.",hi:"Payout history",pen:"Pending",paid:"Paid",rej:"Rejected",lg:"Logo",bn:"Banner",ok:"Saved.",er:"Something went wrong. Please try again.",up:"Uploading…",nof:"No file",per:"Daily revenue, last 30 days",nod:"No sales yet."}};
-const t=k=>D[lang][k]||k,N=n=>lang==="bn"?String(n).replace(/\d/g,d=>"০১২৩৪৫৬৭৮৯"[d]):String(n),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),money=n=>"৳"+N(Math.round(n).toLocaleString("en-US"));
-const api=async(p,o={})=>{try{const r=await fetch(p,{...o,headers:{...(o.headers||{}),...(TK?{Authorization:"Bearer "+TK}:{})}});return await r.json()}catch(e){return{ok:false}}};
-const post=(p,b)=>api(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
-const img=k=>k?"/api/media?k="+encodeURIComponent(k):"";const brand='<b translate="no" class="nt">TASKIFYRA</b>';
-const stars=n=>"★".repeat(n)+"☆".repeat(5-n);
-const m=/^\/s\/([a-z0-9-]+)/.exec(location.pathname);
-// ---------- public store ----------
-async function store(slug){const r=await api("/api/store?slug="+slug),A=$("#app");if(!r.ok){A.innerHTML=`<div class="w"><h2>${t("nf")}</h2><a href="/">${brand}</a></div>`;return}
-const s=r.store,rv=r.reviews||[],avg=pid=>{const x=rv.filter(v=>v.product_id===pid);return x.length?Math.round(x.reduce((a,v)=>a+v.stars,0)/x.length):0};document.title=s.name+" | TASKIFYRA";
-A.innerHTML=`<div class="ban" ${s.banner_key?`style="background-image:url(${img(s.banner_key)})"`:""}></div><div class="w"><div class="pf">${s.logo_key?`<img class="av" src="${img(s.logo_key)}" alt="">`:`<div class="av" aria-hidden="true">${esc(s.name.slice(0,1).toUpperCase())}</div>`}<div><h1>${esc(s.name)}</h1><div class="mut">taskifyra.pages.dev/s/${esc(s.slug)}</div></div></div>
-<p style="max-width:62ch">${esc(s.bio)}</p><h2>${t("pd")}</h2>${r.products.length?`<div class="g">${r.products.map(p=>`<div class="c">${p.cover_key?`<img class="cv" src="${img(p.cover_key)}" alt="" loading="lazy">`:`<div class="cv" aria-hidden="true">${esc(p.title.slice(0,1))}</div>`}<div class="cp"><h3>${esc(p.title)}</h3><p class="mut" style="margin:6px 0">${esc(p.blurb)}</p>${avg(p.id)?`<div class="st" aria-label="${avg(p.id)}/5">${stars(avg(p.id))}</div>`:""}<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="pr">${money(p.price_bdt)}</span><a class="b" href="/?buy=${esc(p.id)}&store=${esc(s.slug)}">${t("buy")}</a></div></div></div>`).join("")}</div>`:`<p class="mut">${t("nopd")}</p>`}
-<h2>${t("rv")}</h2>${rv.length?rv.map(v=>`<div class="c cp" style="margin-bottom:10px"><div class="st">${stars(v.stars)}</div><p style="margin:4px 0">${esc(v.body)}</p><span class="mut">${esc(v.who||"")}</span></div>`).join(""):`<p class="mut">${t("norv")}</p>`}
-<p class="mut" style="margin-top:36px">${t("pw")} ${brand}</p></div>`}
-// ---------- seller dashboard ----------
-let M=null,tab="ov",edit=null;const say=(x,ok)=>{const e=$("#msg");if(e){e.textContent=x;e.style.color=ok?"var(--acc)":"#c0392b"}};
-async function dash(){const A=$("#app");document.head.insertAdjacentHTML("beforeend",'<meta name="robots" content="noindex">');if(!TK){A.innerHTML=`<div class="w"><h2>${t("li")}</h2><a class="b" href="/">${t("lib")}</a></div>`;return}
-M=await api("/api/seller/me");if(!M.ok){A.innerHTML=`<div class="w"><h2>${t("li")}</h2><a class="b" href="/">${t("lib")}</a></div>`;return}
-if(!M.store){A.innerHTML=`<div class="w"><h2>${t("cs")}</h2>${sform("")}</div>`;return}draw()}
-const sform=(sl,n="",b="")=>`<label>${t("sl")}</label><input id="f_sl" value="${esc(sl)}" ${sl?"readonly":""} pattern="[a-z0-9-]{3,30}"><label>${t("nm")}</label><input id="f_nm" maxlength="60" value="${esc(n)}"><label>${t("bio")}</label><textarea id="f_bio" rows="3" maxlength="300">${esc(b)}</textarea><p><button class="b" onclick="saveStore()">${t("sv")}</button></p><div class="msg" id="msg" role="status"></div>`;
-async function saveStore(){const r=await post("/api/seller/store",{slug:$("#f_sl").value.trim(),name:$("#f_nm").value,bio:$("#f_bio").value});if(r.ok)return dash();say(r.error||t("er"))}
-const up=(u,f)=>api(u,{method:"PUT",headers:{"Content-Type":f.type||"application/octet-stream"},body:f});
-function chart(s){const days=[...Array(30)].map((_,i)=>{const d=new Date(Date.now()+216e5-(29-i)*864e5).toISOString().slice(0,10),x=s.find(v=>v.d===d);return x?x.v:0}),mx=Math.max(1,...days);return `<svg viewBox="0 0 300 90" role="img" aria-label="${t("per")}" style="width:100%;height:auto">${days.map((v,i)=>`<rect x="${i*10+1}" y="${84-v/mx*78}" width="8" height="${Math.max(1,v/mx*78)}" rx="2" fill="var(--acc)" opacity="${v?1:.25}"/>`).join("")}</svg>`}
-function draw(){const A=$("#app"),S=M.stats,st=M.store;let h="";
-if(tab==="ov")h=`<div class="k"><div class="c"><span class="mut">${t("vw")}</span><b>${N(S.views)}</b></div><div class="c"><span class="mut">${t("od")}</span><b>${N(S.orders)}</b></div><div class="c"><span class="mut">${t("cr")}</span><b>${N(S.views?(S.orders/S.views*100).toFixed(1):0)}%</b></div><div class="c"><span class="mut">${t("rev")}</span><b>${money(S.revenue)}</b></div></div><h2>${t("per")}</h2><div class="c cp">${S.orders?chart(S.series):`<p class="mut">${t("nod")}</p>`}</div>`;
-if(tab==="pr")h=`<h2>${edit?t("ed"):t("ad")}</h2><div class="c cp"><label>${t("ti")}</label><input id="p_t" maxlength="100" value="${esc(edit?.title)}"><label>${t("pc")}</label><input id="p_p" type="number" min="49" max="50000" value="${edit?edit.price_bdt:""}"><label>${t("bl")}</label><textarea id="p_b" rows="3" maxlength="400">${esc(edit?.blurb)}</textarea><label>${t("cv")}</label><input id="p_c" type="file" accept="image/jpeg,image/png,image/webp"><label>${t("fl")}</label><input id="p_f" type="file"><p><button class="b" onclick="saveProd()">${t("sv")}</button> ${edit?`<button class="b o" onclick="edit=null;draw()">×</button>`:""}</p><div class="msg" id="msg" role="status"></div></div><h2>${t("pr")}</h2><table>${M.products.map(p=>`<tr><td><b>${esc(p.title)}</b><br><span class="mut">${p.has_file?"":t("nof")}</span></td><td>${money(p.price_bdt)}</td><td>${p.status==="live"?t("live"):t("draft")}</td><td><button class="b o" onclick="edit=M.products.find(x=>x.id==='${esc(p.id)}');draw()">${t("ed")}</button></td></tr>`).join("")}</table>`;
-if(tab==="po")h=`<div class="k"><div class="c"><span class="mut">${t("bal")}</span><b>${money(S.balance)}</b></div><div class="c"><span class="mut">${t("fee")}</span><b>${N(M.fee)}%</b></div></div><h2>${t("rq")}</h2><div class="c cp"><label>${t("mt")}</label><select id="y_m"><option>bKash</option><option>Nagad</option><option>Rocket</option></select><label>${t("nu")}</label><input id="y_n" inputmode="numeric" maxlength="11"><label>${t("am")}</label><input id="y_a" type="number" min="500"><p class="mut">${t("mn")}</p><button class="b" onclick="payout()">${t("rq")}</button><div class="msg" id="msg" role="status"></div></div><h2>${t("hi")}</h2><table>${M.payouts.map(x=>`<tr><td>${new Date(x.created_at).toLocaleDateString(lang==="bn"?"bn-BD":"en-GB")}</td><td>${money(x.amount_bdt)}</td><td>${x.status==="paid"?t("paid"):x.status==="rejected"?t("rej"):t("pen")}</td></tr>`).join("")}</table>`;
-if(tab==="se")h=`<h2>${t("se")}</h2><div class="c cp">${sform(st.slug,st.name,st.bio)}<label>${t("lg")}</label><input type="file" accept="image/jpeg,image/png,image/webp" onchange="media('logo',this.files[0])"><label>${t("bn")}</label><input type="file" accept="image/jpeg,image/png,image/webp" onchange="media('banner',this.files[0])"><p><a href="/s/${esc(st.slug)}">taskifyra.pages.dev/s/${esc(st.slug)}</a></p></div>`;
-A.innerHTML=`<div class="w"><h1 style="margin-top:18px">${esc(st.name)}</h1><div class="tabs" role="tablist">${[["ov","ov"],["pr","pr"],["po","po"],["se","se"]].map(([k,l])=>`<button role="tab" class="${tab===k?"on":""}" aria-selected="${tab===k}" onclick="tab='${k}';edit=null;draw()">${t(l)}</button>`).join("")}</div>${h}<p class="mut" style="margin-top:36px">${t("pw")} ${brand}</p></div>`}
-async function saveProd(){const ti=$("#p_t").value,pc=$("#p_p").value,bl=$("#p_b").value,c=$("#p_c").files[0],f=$("#p_f").files[0];say(t("up"),1);let id=edit&&edit.id;
-const r=edit?await post("/api/seller/product/update",{id,title:ti,price:pc,blurb:bl}):await post("/api/seller/product",{title:ti,price:pc,blurb:bl});if(!r.ok)return say(r.error||t("er"));id=id||r.id;
-if(f){const u=await up("/api/seller/upload?pid="+id+"&name="+encodeURIComponent(f.name),f);if(!u.ok)return say(u.error||t("er"))}if(c){const u=await up("/api/seller/media?kind=cover&pid="+id,c);if(!u.ok)return say(u.error||t("er"))}edit=null;await dash()}
-async function media(k,f){if(!f)return;const r=await up("/api/seller/media?kind="+k,f);if(r.ok)dash();else say(r.error||t("er"))}
-async function payout(){const r=await post("/api/seller/payout",{method:$("#y_m").value,number:$("#y_n").value,amount:$("#y_a").value});if(r.ok)return dash();say(r.error||t("er"))}
-m?store(m[1]):dash();
-</script></body></html>
+// Seller stores, marketplace orders, media, payouts, signed downloads, reviews and admin tools.
+// Everything here is backed by D1 (env.DB) and R2 (env.FILES).
+import { J, same, mac, rid, clean, dayStr, limited, sendMail, esc, approveMarketOrder } from "./lib.js";
+import { bkashOn } from "./bkash.js";
+
+const METHODS = ["bKash", "Nagad", "Rocket"];
+const FILE_OK = /\.(pdf|zip|rar|7z|docx?|xlsx?|pptx?|csv|txt|md|epub|png|jpe?g|webp|mp3|mp4|json|psd|ai|fig)$/i;
+const V = "CASE WHEN o.currency='USD' THEN o.amount*120 ELSE o.amount END";
+const feePct = (env) => Math.min(50, Math.max(0, Number(env.FEE_PCT ?? 10) || 0));
+
+const first = (env, s, ...b) => env.DB.prepare(s).bind(...b).first();
+const rows = (env, s, ...b) => env.DB.prepare(s).bind(...b).all().then((r) => r.results);
+const ownStore = (env, a) => first(env, "SELECT id,slug,name,bio,logo_key,banner_key FROM stores WHERE owner_email=?", a.email);
+const isAdmin = (req, env) => {
+  const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  return !!env.ADMIN_API_KEY && same(t, env.ADMIN_API_KEY);
+};
+
+async function stats(env, s) {
+  const since = Date.now() - 30 * 864e5;
+  const series = await rows(env, `SELECT date((o.approved_at+21600000)/1000,'unixepoch') d,COUNT(*) n,SUM(${V}) v FROM orders o WHERE o.store_id=? AND o.status='approved' AND o.approved_at>? GROUP BY d ORDER BY d`, s.id, since);
+  const net = await first(env, `SELECT COALESCE(SUM(${V}-o.fee_bdt),0) v FROM orders o WHERE o.store_id=? AND o.status='approved'`, s.id);
+  const vw = await first(env, "SELECT COALESCE(SUM(n),0) n FROM views WHERE store_id=? AND day>=?", s.id, dayStr(since));
+  const payouts = await rows(env, "SELECT id,amount_bdt,status,created_at FROM payouts WHERE store_id=? ORDER BY created_at DESC LIMIT 20", s.id);
+  const taken = await first(env, "SELECT COALESCE(SUM(amount_bdt),0) t FROM payouts WHERE store_id=? AND status!='rejected'", s.id);
+  return {
+    views: vw.n,
+    orders: series.reduce((t, x) => t + x.n, 0),
+    revenue: Math.round(series.reduce((t, x) => t + x.v, 0)),
+    series,
+    payouts,
+    balance: Math.max(0, Math.floor(net.v) - taken.t),
+  };
+}
+
+// h = { sessUser(req) -> {email,name}|null, ctx }
+export async function routes(req, env, url, p, h) {
+  if (!env.DB) return null;
+  const m = req.method;
+  const auth = async () => h.sessUser(req);
+
+  // ---------- public ----------
+  if (p === "/api/store" && m === "GET") {
+    const s = await first(env, "SELECT id,slug,name,bio,logo_key,banner_key FROM stores WHERE slug=? AND status='live'", (url.searchParams.get("slug") || "").toLowerCase());
+    if (!s) return J({ ok: false, error: "Store not found" }, 404);
+    h.ctx.waitUntil(env.DB.prepare("INSERT INTO views(store_id,day,n) VALUES(?,?,1) ON CONFLICT(store_id,day) DO UPDATE SET n=n+1").bind(s.id, dayStr(Date.now())).run().catch(() => {}));
+    const { id, ...store } = s;
+    return J({
+      ok: true,
+      store,
+      products: await rows(env, "SELECT id,title,blurb,price_bdt,cover_key FROM products WHERE store_id=? AND status='live' ORDER BY created_at DESC LIMIT 60", id),
+      reviews: await rows(env, "SELECT r.product_id,r.stars,r.body,substr(u.name,1,instr(u.name||' ',' ')-1) who FROM reviews r JOIN products p ON p.id=r.product_id LEFT JOIN users u ON u.email=r.email WHERE p.store_id=? ORDER BY r.created_at DESC LIMIT 30", id),
+      pay: { methods: METHODS, numbers: { bKash: env.PAY_BKASH || "01812410928", Nagad: env.PAY_NAGAD || "01812410928", Rocket: env.PAY_ROCKET || "01812410928" }, auto: bkashOn(env) },
+    });
+  }
+
+  if (p === "/api/media" && m === "GET") {
+    const k = url.searchParams.get("k") || "";
+    if (!/^m\/[\w-]+\/[\w-]+$/.test(k)) return J({ ok: false }, 404);
+    const f = await env.FILES.get(k);
+    if (!f) return J({ ok: false }, 404);
+    return new Response(f.body, { headers: { "Content-Type": f.httpMetadata?.contentType || "image/jpeg", "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+  }
+
+  // ---------- buyer: order for a seller product (items starting with "x") ----------
+  if (p === "/api/order" && m === "POST") {
+    const raw = await req.clone().json().catch(() => null);
+    if (!raw || typeof raw.item !== "string" || raw.item[0] !== "x") return null; // own catalogue -> legacy worker
+    if (await limited(env, req, "ord", 8)) return J({ ok: false, error: "Too many attempts. Try again in a minute." }, 429);
+    const c = raw.customer || {};
+    const name = clean(c.name, 80), email = clean(c.email, 120).toLowerCase(), phone = clean(c.phone, 20).replace(/^\+?88/, "");
+    const method = raw.method, auto = raw.auto === true && method === "bKash" && bkashOn(env);
+    const trx = clean(raw.trx, 30).toUpperCase();
+    if (!METHODS.includes(method) || name.length < 2 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !/^01\d{9}$/.test(phone) || (!auto && !/^[A-Z0-9]{6,20}$/.test(trx)))
+      return J({ ok: false, error: "Check your name, email, mobile number and TrxID." }, 400);
+    const pr = await first(env, "SELECT p.id,p.price_bdt,p.store_id FROM products p JOIN stores s ON s.id=p.store_id WHERE p.id=? AND p.status='live' AND s.status='live' AND p.r2_key IS NOT NULL", raw.item);
+    if (!pr) return J({ ok: false, error: "This product is not available." }, 404);
+    if (!auto && (await first(env, "SELECT 1 x FROM orders WHERE trx=? AND status!='rejected'", trx))) return J({ ok: false, error: "This TrxID was already used." }, 409);
+    const id = "m" + rid(8), key = rid(16);
+    let proofKey = null;
+    if (typeof raw.proof === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(raw.proof) && raw.proof.length < 1.2e6) {
+      try {
+        const bytes = Uint8Array.from(atob(raw.proof.split(",")[1]), (ch) => ch.charCodeAt(0));
+        proofKey = "proofs/" + id;
+        await env.FILES.put(proofKey, bytes, { httpMetadata: { contentType: raw.proof.slice(5, raw.proof.indexOf(";")) } });
+      } catch (e) { proofKey = null; }
+    }
+    await env.DB.prepare("INSERT INTO orders(id,okey,item,method,currency,amount,trx,name,email,phone,status,created_at,approved_at,store_id,fee_bdt,proof_key) VALUES(?,?,?,?,'BDT',?,?,?,?,?,'pending',?,0,?,?,?)")
+      .bind(id, key, pr.id, method, pr.price_bdt, auto ? "" : trx, name, email, phone, Date.now(), pr.store_id, Math.round((pr.price_bdt * feePct(env)) / 100), proofKey).run();
+    if (!auto) h.ctx.waitUntil(sendMail(env, env.ADMIN_EMAIL, "New marketplace order " + id, `<p>${esc(name)} · ${esc(method)} · ${pr.price_bdt} BDT · TrxID ${esc(trx)}</p>`));
+    return J({ ok: true, id, key });
+  }
+
+  if (p === "/api/order" && m === "GET") {
+    const o = await first(env, "SELECT o.status,o.item,p.file_name FROM orders o LEFT JOIN products p ON p.id=o.item WHERE o.id=? AND o.okey=? AND o.item LIKE 'x%'", url.searchParams.get("id") || "", url.searchParams.get("key") || "");
+    if (!o) return null;
+    return J({ ok: true, status: o.status, item: o.item, file: o.status === "approved" ? o.file_name : undefined });
+  }
+
+  // ---------- buyer: signed download (5 min, bound to the order) ----------
+  if (p === "/api/dl" && m === "GET") {
+    const oid = url.searchParams.get("oid") || "", pid = url.searchParams.get("pid") || "";
+    const o = await first(env, "SELECT okey,item,status FROM orders WHERE id=?", oid);
+    if (!o || o.status !== "approved" || !same(o.okey || "", url.searchParams.get("key") || "") || o.item !== pid) return J({ ok: false }, 403);
+    const x = Date.now() + 3e5;
+    return J({ ok: true, url: `/api/dl/get?oid=${oid}&pid=${pid}&x=${x}&s=${await mac(env, `${pid}.${oid}.${x}`)}` });
+  }
+  if (p === "/api/dl/get" && m === "GET") {
+    const oid = url.searchParams.get("oid") || "", pid = url.searchParams.get("pid") || "", x = Number(url.searchParams.get("x")) || 0;
+    if (x < Date.now() || !same(await mac(env, `${pid}.${oid}.${x}`), url.searchParams.get("s") || "")) return J({ ok: false }, 403);
+    const o = await first(env, "SELECT status FROM orders WHERE id=? AND item=?", oid, pid);
+    if (!o || o.status !== "approved") return J({ ok: false }, 403);
+    const r = await first(env, "SELECT r2_key,file_name FROM products WHERE id=?", pid);
+    const f = r && r.r2_key && (await env.FILES.get(r.r2_key));
+    if (!f) return J({ ok: false }, 404);
+    const fn = String(r.file_name || "download").replace(/[^\w.\- ]/g, "_");
+    return new Response(f.body, { headers: { "Content-Type": f.httpMetadata?.contentType || "application/octet-stream", "Content-Disposition": `attachment; filename="${fn}"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  }
+
+  if (p === "/api/review" && m === "POST") {
+    const a = await auth();
+    if (!a) return J({ ok: false }, 401);
+    const d = await req.json().catch(() => ({})), st = Math.round(+d.stars || 0), pid = String(d.pid || "");
+    const bought = await first(env, "SELECT 1 x FROM orders WHERE email=? AND item=? AND status='approved'", a.email, pid);
+    if (!bought || st < 1 || st > 5) return J({ ok: false, error: "Only buyers can review" }, 403);
+    await env.DB.prepare("INSERT OR REPLACE INTO reviews(id,product_id,email,stars,body,created_at) VALUES(?,?,?,?,?,?)").bind(pid + ":" + a.email, pid, a.email, st, clean(d.body, 500), Date.now()).run();
+    return J({ ok: true });
+  }
+
+  // ---------- seller (login required) ----------
+  if (p.startsWith("/api/seller/")) {
+    const a = await auth();
+    if (!a) return J({ ok: false, error: "Please log in" }, 401);
+    const s = await ownStore(env, a);
+
+    if (p === "/api/seller/me" && m === "GET") {
+      if (!s) return J({ ok: true, store: null });
+      return J({
+        ok: true, store: s, fee: feePct(env),
+        products: await rows(env, "SELECT id,title,blurb,price_bdt,cover_key,r2_key IS NOT NULL has_file,status FROM products WHERE store_id=? ORDER BY created_at DESC", s.id),
+        stats: await stats(env, s),
+      });
+    }
+
+    if (p === "/api/seller/store" && m === "POST") {
+      if (await limited(env, req, "store", 10)) return J({ ok: false, error: "Too many requests" }, 429);
+      const d = await req.json().catch(() => ({})), slug = String(d.slug || "").toLowerCase();
+      if (!/^[a-z0-9-]{3,30}$/.test(slug) || /^-|-$/.test(slug)) return J({ ok: false, error: "Store name: 3-30 letters, numbers or hyphens" }, 400);
+      if (["admin", "api", "img", "store", "s", "login", "seller"].includes(slug)) return J({ ok: false, error: "This store name is reserved" }, 400);
+      const ex = await first(env, "SELECT owner_email FROM stores WHERE slug=?", slug);
+      if (ex && ex.owner_email !== a.email) return J({ ok: false, error: "This store name is taken" }, 409);
+      if (s && s.slug !== slug) return J({ ok: false, error: "Store address cannot be changed after creation" }, 400);
+      if (s) await env.DB.prepare("UPDATE stores SET name=?,bio=? WHERE id=?").bind(clean(d.name, 60), clean(d.bio, 300), s.id).run();
+      else await env.DB.prepare("INSERT INTO stores(id,owner_email,slug,name,bio,created_at) VALUES(?,?,?,?,?,?)").bind(rid(6), a.email, slug, clean(d.name, 60), clean(d.bio, 300), Date.now()).run();
+      return J({ ok: true });
+    }
+
+    if (!s) return J({ ok: false, error: "Create your store first" }, 400);
+
+    if (p === "/api/seller/product" && m === "POST") {
+      const d = await req.json().catch(() => ({})), price = Math.round(+d.price || 0);
+      if (price < 49 || price > 50000) return J({ ok: false, error: "Price must be 49 to 50000 BDT" }, 400);
+      const title = clean(d.title, 100);
+      if (title.length < 3) return J({ ok: false, error: "Add a product title" }, 400);
+      const n = await first(env, "SELECT COUNT(*) n FROM products WHERE store_id=?", s.id);
+      if (n.n >= 100) return J({ ok: false, error: "Product limit reached" }, 400);
+      const id = "x" + rid(6);
+      await env.DB.prepare("INSERT INTO products(id,store_id,title,blurb,price_bdt,created_at,status) VALUES(?,?,?,?,?,?,'draft')").bind(id, s.id, title, clean(d.blurb, 400), price, Date.now()).run();
+      return J({ ok: true, id });
+    }
+
+    if (p === "/api/seller/product/update" && m === "POST") {
+      const d = await req.json().catch(() => ({})), price = Math.round(+d.price || 0);
+      if (price < 49 || price > 50000) return J({ ok: false, error: "Price must be 49 to 50000 BDT" }, 400);
+      const r = await env.DB.prepare("UPDATE products SET title=?,blurb=?,price_bdt=? WHERE id=? AND store_id=?").bind(clean(d.title, 100), clean(d.blurb, 400), price, String(d.id || ""), s.id).run();
+      return J({ ok: !!r.meta.changes });
+    }
+
+    if (p === "/api/seller/media" && m === "PUT") {
+      const kind = url.searchParams.get("kind"), ct = req.headers.get("content-type") || "", len = +req.headers.get("content-length") || 0;
+      if (!/^image\/(jpeg|png|webp)$/.test(ct) || !len || len > 2e6) return J({ ok: false, error: "Image must be JPG, PNG or WebP under 2 MB" }, 400);
+      const key = `m/${s.id}/${rid(8)}`, meta = { httpMetadata: { contentType: ct } };
+      if (kind === "cover") {
+        const pid = url.searchParams.get("pid") || "";
+        if (!(await first(env, "SELECT 1 x FROM products WHERE id=? AND store_id=?", pid, s.id))) return J({ ok: false }, 403);
+        await env.FILES.put(key, req.body, meta);
+        await env.DB.prepare("UPDATE products SET cover_key=? WHERE id=?").bind(key, pid).run();
+      } else if (kind === "logo" || kind === "banner") {
+        await env.FILES.put(key, req.body, meta);
+        await env.DB.prepare(kind === "logo" ? "UPDATE stores SET logo_key=? WHERE id=?" : "UPDATE stores SET banner_key=? WHERE id=?").bind(key, s.id).run();
+      } else return J({ ok: false }, 400);
+      return J({ ok: true, key });
+    }
+
+    if (p === "/api/seller/upload" && m === "PUT") {
+      const pid = url.searchParams.get("pid") || "";
+      if (!(await first(env, "SELECT 1 x FROM products WHERE id=? AND store_id=?", pid, s.id))) return J({ ok: false }, 403);
+      const len = +req.headers.get("content-length") || 0;
+      if (!len || len > 25e6) return J({ ok: false, error: "File must be under 25 MB" }, 413);
+      const name = clean(url.searchParams.get("name") || "file", 80).replace(/[^\w.\- ]/g, "_");
+      if (!FILE_OK.test(name)) return J({ ok: false, error: "File type not allowed (use PDF, ZIP, Office, image, audio, video or text)" }, 400);
+      const key = `p/${pid}/${rid(6)}`;
+      await env.FILES.put(key, req.body, { httpMetadata: { contentType: req.headers.get("content-type") || "application/octet-stream" } });
+      await env.DB.prepare("UPDATE products SET r2_key=?,file_name=?,status='live' WHERE id=?").bind(key, name, pid).run();
+      return J({ ok: true });
+    }
+
+    if (p === "/api/seller/payout" && m === "POST") {
+      const d = await req.json().catch(() => ({})), amt = Math.floor(+d.amount || 0);
+      if (amt < 500 || !METHODS.includes(d.method) || !/^01\d{9}$/.test(String(d.number || ""))) return J({ ok: false, error: "Check the method, number and amount (minimum 500)" }, 400);
+      const st = await stats(env, s);
+      if (amt > st.balance) return J({ ok: false, error: "Amount is above your balance" }, 400);
+      // One pending payout per store; the conditional insert also closes the double-submit race.
+      const r = await env.DB.prepare("INSERT INTO payouts(id,store_id,amount_bdt,created_at,status) SELECT ?,?,?,?,'pending' WHERE NOT EXISTS(SELECT 1 FROM payouts WHERE store_id=? AND status='pending')").bind(rid(6), s.id, amt, Date.now(), s.id).run();
+      if (!r.meta.changes) return J({ ok: false, error: "You already have a payout waiting for approval" }, 409);
+      await env.DB.prepare("UPDATE stores SET payout_method=?,payout_number=? WHERE id=?").bind(d.method, d.number, s.id).run();
+      return J({ ok: true });
+    }
+    return J({ ok: false }, 404);
+  }
+
+  // ---------- admin (Bearer ADMIN_API_KEY) ----------
+  if (p.startsWith("/api/admin/market/")) {
+    if (await limited(env, req, "adm", 60)) return J({ ok: false, error: "Too many requests" }, 429);
+    if (!isAdmin(req, env)) return J({ ok: false }, 401);
+    if (p === "/api/admin/market/health" && m === "GET") return J(await health(env));
+    if (p === "/api/admin/market/orders" && m === "GET")
+      return J({ ok: true, orders: await rows(env, "SELECT id,item,method,amount,trx,name,email,phone,created_at,proof_key IS NOT NULL has_proof FROM orders WHERE status='pending' AND item LIKE 'x%' ORDER BY created_at DESC LIMIT 100") });
+    if (p === "/api/admin/market/proof" && m === "GET") {
+      const o = await first(env, "SELECT proof_key FROM orders WHERE id=?", url.searchParams.get("id") || ""), f = o && o.proof_key && (await env.FILES.get(o.proof_key));
+      return f ? new Response(f.body, { headers: { "Content-Type": f.httpMetadata?.contentType || "image/jpeg", "Cache-Control": "no-store" } }) : J({ ok: false }, 404);
+    }
+    if (p === "/api/admin/market/order" && m === "POST") {
+      const d = await req.json().catch(() => ({})), id = String(d.id || "");
+      if (d.action === "approve") return J({ ok: await approveMarketOrder(env, h.ctx, id) });
+      if (d.action === "reject") return J({ ok: !!(await env.DB.prepare("UPDATE orders SET status='rejected' WHERE id=? AND status='pending' AND item LIKE 'x%'").bind(id).run()).meta.changes });
+      return J({ ok: false }, 400);
+    }
+    if (p === "/api/admin/market/payouts" && m === "GET")
+      return J({ ok: true, payouts: await rows(env, "SELECT y.id,y.amount_bdt,y.created_at,s.slug,s.payout_method,s.payout_number FROM payouts y JOIN stores s ON s.id=y.store_id WHERE y.status='pending' ORDER BY y.created_at") });
+    if (p === "/api/admin/market/payout" && m === "POST") {
+      const d = await req.json().catch(() => ({})), st = d.action === "paid" ? "paid" : d.action === "reject" ? "rejected" : null;
+      if (!st) return J({ ok: false }, 400);
+      return J({ ok: !!(await env.DB.prepare("UPDATE payouts SET status=?,paid_at=? WHERE id=? AND status='pending'").bind(st, Date.now(), String(d.id || "")).run()).meta.changes });
+    }
+    if (p === "/api/admin/market/stats" && m === "GET") {
+      const ok = "status='approved'";
+      const t = await first(env, `SELECT COUNT(*) n,COALESCE(SUM(CASE WHEN currency='USD' THEN amount*120 ELSE amount END),0) v FROM orders WHERE ${ok}`);
+      const days = await rows(env, `SELECT date((approved_at+21600000)/1000,'unixepoch') day,COUNT(*) n,SUM(CASE WHEN currency='USD' THEN amount*120 ELSE amount END) v FROM orders WHERE ${ok} GROUP BY day ORDER BY day DESC LIMIT 30`);
+      const pend = await first(env, "SELECT COUNT(*) n FROM orders WHERE status IN('pending','awaiting_card')");
+      return J({ ok: true, orders: t.n, total: t.v, days, pending: pend.n });
+    }
+    return J({ ok: false }, 404);
+  }
+
+  return null;
+}
+
+// ---------- mirror of the legacy catalogue orders into D1 (never blocks the request) ----------
+export async function mirrorNew(env, body, r) {
+  try {
+    const c = body.customer || {};
+    await env.DB.prepare("INSERT OR IGNORE INTO orders(id,okey,item,method,currency,amount,trx,name,email,phone,status,created_at,approved_at) VALUES(?,?,?,?,?,?,?,?,?,?,'pending',?,0)")
+      .bind(String(r.id), String(r.key || ""), String(body.item || ""), String(body.method || ""), body.currency === "USD" ? "USD" : "BDT", Number(r.amount) || 0, String(body.trx || ""), clean(c.name, 80), clean(c.email, 120).toLowerCase(), clean(c.phone, 20), Date.now()).run();
+  } catch (e) { console.log("mirrorNew", String(e && e.message)); }
+}
+export async function mirrorStatus(env, id, status) {
+  try {
+    if (status === "approved" || status === "rejected")
+      await env.DB.prepare("UPDATE orders SET status=?,approved_at=CASE WHEN ?='approved' AND approved_at=0 THEN ? ELSE approved_at END WHERE id=? AND status!=?").bind(status, status, Date.now(), id, status).run();
+  } catch (e) { console.log("mirrorStatus", String(e && e.message)); }
+}
+
+// ---------- deployment self-check (admin only): shows exactly what is still missing ----------
+async function health(env) {
+  const out = { ok: true, problems: [] }, bad = (t) => { out.ok = false; out.problems.push(t); };
+  try { out.tables = {}; for (const t of ["users", "stores", "products", "orders", "reviews", "payouts", "views"]) out.tables[t] = (await first(env, `SELECT COUNT(*) n FROM ${t}`)).n; } catch (e) { bad("D1 tables missing: run schema.sql / migration (" + String(e.message).slice(0, 80) + ")"); }
+  try { await first(env, "SELECT banner_key,cover_key,proof_key FROM stores s, products p, orders o LIMIT 1"); } catch (e) { bad("D1 is missing columns banner_key/cover_key/proof_key: run migrations/0002_v10.sql"); }
+  try { await env.FILES.list({ limit: 1 }); } catch (e) { bad("R2 bucket FILES not reachable"); }
+  out.secrets = { RESEND_API_KEY: !!env.RESEND_API_KEY, SESSION_SECRET: !!env.SESSION_SECRET, ADMIN_API_KEY: !!env.ADMIN_API_KEY, bkash_auto: bkashOn(env) };
+  for (const k of ["RESEND_API_KEY", "SESSION_SECRET", "ADMIN_API_KEY"]) if (!env[k]) bad("Secret missing: " + k);
+  if (!/^[^<>@]*<[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+>$|^[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+$/.test(env.FROM_EMAIL || "") || /re_[A-Za-z0-9_]{16,}/.test(env.FROM_EMAIL || "")) bad("FROM_EMAIL must look like: Taskifyra <orders@your-verified-domain.com> (never an API key)");
+  if (env.RESEND_API_KEY) {
+    try {
+      const r = await fetch("https://api.resend.com/domains", { headers: { Authorization: "Bearer " + env.RESEND_API_KEY } });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) bad("Resend rejected the API key (" + r.status + "). Create a new key and set it as RESEND_API_KEY");
+      else {
+        out.resend_domains = (j.data || []).map((d) => ({ name: d.name, status: d.status }));
+        const dom = String(env.FROM_EMAIL || "").match(/@([^>\s]+)/);
+        const hit = dom && (j.data || []).find((d) => d.name === dom[1].toLowerCase());
+        if (!hit) bad("FROM_EMAIL domain is not added in Resend");
+        else if (hit.status !== "verified") bad(`Resend domain ${hit.name} is "${hit.status}": finish the DNS records`);
+      }
+    } catch (e) { bad("Could not reach Resend"); }
+  }
+  return out;
+}
