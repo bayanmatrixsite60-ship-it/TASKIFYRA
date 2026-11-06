@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Marketplace admin — Taskifyra</title>
+<style>
+:root{--bg:#f6f8f7;--card:#fff;--ink:#10202b;--mut:#5b6b77;--line:#e1e8e5;--g:#0f8f6e;--gd:#0b6e55;--r:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1512;--card:#15201c;--ink:#e8f0ed;--mut:#9db0a8;--line:#24342e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 16px;max-width:1000px;margin:auto}header b{margin-right:auto;letter-spacing:.04em}
+main{max-width:1000px;margin:auto;padding:0 16px 48px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:7px 12px;background:var(--g);color:#fff;cursor:pointer}button.o{background:transparent;color:var(--g);border:1.5px solid var(--g)}button.d{background:var(--r)}button[disabled]{opacity:.6}button.on{outline:2px solid var(--ink)}
+input{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%;max-width:420px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.mut{color:var(--mut)}.err{color:var(--r)}.ok{color:var(--g)}
+</style>
+</head>
+<body>
+<header><b>TASKIFYRA · Marketplace admin</b><button class="o on" data-t="orders">Orders</button><button class="o" data-t="payouts">Payouts</button><button class="o" data-t="stats">Stats</button><button class="o" data-t="health">Health check</button><button class="o" id="out">Lock</button></header>
+<main id="m"></main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const K=()=>{try{return sessionStorage.getItem("mk_key")||""}catch(e){return""}};
+const call=async(p,body)=>{let j={},s=0;try{const r=await fetch(p,{method:body?"POST":"GET",headers:{Authorization:"Bearer "+K(),...(body?{"Content-Type":"application/json"}:{})},body:body?JSON.stringify(body):undefined});s=r.status;j=await r.json()}catch(e){}j._s=s;return j};
+let tab="orders";
+function lock(msg){$("m").innerHTML=`<div class="card"><p>Enter the admin key (the ADMIN_API_KEY secret). It is kept only for this browser tab.</p><div class="row"><input id="k" type="password" autocomplete="off" placeholder="Admin key"><button id="go">Unlock</button></div><p class="err">${esc(msg||"")}</p></div>`;
+  $("go").onclick=async()=>{try{sessionStorage.setItem("mk_key",$("k").value.trim())}catch(e){}show()};}
+async function show(){
+  document.querySelectorAll("header [data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t===tab));
+  if(!K())return lock();
+  const m=$("m");m.innerHTML='<p class="mut">Loading…</p>';
+  if(tab==="orders"){const r=await call("/api/admin/market/orders");if(r._s===401){try{sessionStorage.removeItem("mk_key")}catch(e){}return lock("Wrong key")}
+    m.innerHTML=(r.orders||[]).length?r.orders.map(o=>`<div class="card" data-id="${esc(o.id)}"><b>${esc(o.name)}</b> · ${esc(o.method)} · <b>${o.amount} ৳</b> · TrxID <b>${esc(o.trx)}</b><br><span class="mut">${esc(o.phone)} · ${esc(o.email)} · ${new Date(o.created_at).toLocaleString()} · item ${esc(o.item)}</span><div class="row" style="margin-top:8px"><button data-a="approve">Approve</button><button class="d" data-a="reject">Reject</button>${o.has_proof?'<button class="o" data-a="proof">View screenshot</button>':""}</div></div>`).join(""):'<p class="mut">No pending orders.</p>';}
+  if(tab==="payouts"){const r=await call("/api/admin/market/payouts");m.innerHTML=r.payouts&&r.payouts.length?r.payouts.map(y=>`<div class="card" data-id="${esc(y.id)}"><b>${y.amount_bdt} ৳</b> to <b>${esc(y.payout_method)} ${esc(y.payout_number)}</b> · store ${esc(y.slug)}<br><span class="mut">${new Date(y.created_at).toLocaleString()}</span><div class="row" style="margin-top:8px"><button data-p="paid">Mark paid</button><button class="d" data-p="reject">Reject</button></div></div>`).join(""):'<p class="mut">No pending payouts.</p>';}
+  if(tab==="stats"){const r=await call("/api/admin/market/stats");m.innerHTML=`<div class="card"><b>${r.orders||0}</b> approved orders · <b>${Math.round(r.total||0)} ৳</b> total · <b>${r.pending||0}</b> pending</div>`+((r.days||[]).length?`<div class="card">${r.days.map(d=>`${esc(d.day)}: ${d.n} orders, ${Math.round(d.v)} ৳`).join("<br>")}</div>`:"")}
+  if(tab==="health"){const r=await call("/api/admin/market/health");m.innerHTML=`<div class="card"><b class="${r.ok?"ok":"err"}">${r.ok?"Everything looks correct":"Problems found"}</b>${(r.problems||[]).map(x=>`<p class="err">• ${esc(x)}</p>`).join("")}<pre style="white-space:pre-wrap;font-size:13px">${esc(JSON.stringify({tables:r.tables,secrets:r.secrets,resend_domains:r.resend_domains},null,2))}</pre></div>`}
+}
+document.querySelector("header").onclick=e=>{const b=e.target.closest("[data-t]");if(b){tab=b.dataset.t;show()}if(e.target.id==="out"){try{sessionStorage.removeItem("mk_key")}catch(x){}lock()}};
+$("m").onclick=async e=>{const b=e.target.closest("button[data-a],button[data-p]");if(!b)return;const id=b.closest("[data-id]").dataset.id;
+  if(b.dataset.a==="proof"){const r=await fetch("/api/admin/market/proof?id="+encodeURIComponent(id),{headers:{Authorization:"Bearer "+K()}});if(r.ok)window.open(URL.createObjectURL(await r.blob()));return}
+  if(b.dataset.a&&!confirm((b.dataset.a==="approve"?"Approve":"Reject")+" this order?"))return;
+  if(b.dataset.p==="paid"&&!confirm("Mark as paid? Do this only after you sent the money."))return;
+  b.disabled=true;if(b.dataset.a)await call("/api/admin/market/order",{id,action:b.dataset.a});else await call("/api/admin/market/payout",{id,action:b.dataset.p});show()};
+show();
+})();
+</script>
+</body>
+</html>
