@@ -1,14 +1,11 @@
-# Belt and braces: even if one of these is ever copied into public/, it will not be uploaded.
 _worker.js
 _routes.json
-*.sql
-*.toml
-*.zip
-*.map
-*.md
-.git*
-.dev.vars
-.env*
+wrangler.toml
+package.json
+bun.lock
+bun.lockb
 node_modules
-src
-migrations
+*.md
+*.zip
+*.sql
+.gitignore
