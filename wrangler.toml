@@ -23,11 +23,6 @@ binding = "DB"
 database_name = "taskifyra"
 database_id ="​1e641585-5a03-414b-b063-4442f5bf78ae"
 
-# R2: dashboard -> R2 -> Create bucket "taskifyra-files" (keep it PRIVATE).
-[[r2_buckets]]
-binding = "FILES"
-bucket_name = "taskifyra-files"
-
 [vars]
 SITE_URL = "https://taskifyra.pages.dev"
 ADMIN_EMAIL = "bayanmatrixsite60@gmail.com"
